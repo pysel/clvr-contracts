@@ -8,17 +8,8 @@ import { ClvrLibrary } from "./ClvrLibrary.sol";
 
 
 contract ClvrIntentPool is IERC1271 {
-    struct CLVRIntent {
-        address creator;
-        address tokenIn;
-        address tokenOut;
-        address recipient;
-        uint256 amountIn;
-        uint256 deadline;
-    }
-
-    // Array of intents
-    CLVRIntent[] public intents;
+    // Mapping of intents from bytes32 hash to intent itself
+    mapping(bytes32 => ClvrLibrary.CLVRIntent) public intents;
 
     constructor() {}
 
@@ -29,7 +20,7 @@ contract ClvrIntentPool is IERC1271 {
      * @param r The r component of the signature
      * @param s The s component of the signature
      */
-    function submitIntent(CLVRIntent memory intent, uint8 v, bytes32 r, bytes32 s) public {
+    function submitIntent(ClvrLibrary.CLVRIntent memory intent, uint8 v, bytes32 r, bytes32 s) public {
         bytes32 digest = keccak256(abi.encode(intent));
 
         // Ensure the intent is valid
@@ -39,16 +30,16 @@ contract ClvrIntentPool is IERC1271 {
         }
 
         // Store the intent
-        // Note: if the intent exists in the array, it has been signed already
-        intents.push(intent);
+        // Note: if the intent exists in the mapping, it has been signed already
+        intents[digest] = intent;
     }
 
     function isValidSignature(
-        bytes32 intentsHash,
+        bytes32 intentHash,
         bytes memory
-    ) external view override returns (bytes4 magicValue) {
-        bytes32 actualHash = keccak256(abi.encode(intents));
-        if (actualHash != intentsHash) {
+    ) external pure override returns (bytes4 magicValue) {
+        bytes32 actualHash = keccak256(abi.encode(intentHash));
+        if (actualHash != intentHash) {
             return ClvrLibrary.INVALID_SIGNATURE;
         }
 
