@@ -2,6 +2,7 @@
 pragma solidity ^0.8.24;
 
 import { ISwapRouter } from "@uniswap/v3-periphery/contracts/interfaces/ISwapRouter.sol";
+import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 import { ClvrIntentPool } from "./ClvrIntentPool.sol";
 import { ClvrLibrary } from "./ClvrLibrary.sol";
@@ -16,13 +17,15 @@ contract ClvrExecutor {
     }
 
     function executeBatch(ClvrLibrary.CLVRIntent[] memory intents) public {
-        uint256[] memory volumes = new uint256[](intents.length);
+        // uint256[] memory volumes = new uint256[](intents.length);
         for (uint256 i = 0; i < intents.length; i++) {
             bytes32 intentHash = keccak256(abi.encode(intents[i]));
             bytes4 verification = intentPool.isValidSignature(intentHash, "");
             if (verification != ClvrLibrary.MAGICVALUE) {
                 revert("Invalid Intent Passed to Executor");
             }
+
+
         }
     }
 
@@ -37,11 +40,12 @@ contract ClvrExecutor {
             recipient: intent.recipient,
             deadline: block.timestamp,
             amountIn: intent.amountIn,
-            amountOutMinimum: 0
+            amountOutMinimum: 0,
+            sqrtPriceLimitX96: 0
         }));
 
         IERC20(intent.tokenOut).transfer(intent.recipient, amountOut);
 
-        emit IntentExecuted(intent.creator, intent.tokenIn, intent.tokenOut, intent.recipient, intent.fee, intent.amountIn, amountOut);
+        // emit IntentExecuted(intent.creator, intent.tokenIn, intent.tokenOut, intent.recipient, intent.fee, intent.amountIn, amountOut);
     }
 }
