@@ -7,9 +7,9 @@ import "@openzeppelin/contracts/utils/Address.sol";
 import { ClvrLibrary } from "./ClvrLibrary.sol";
 
 
-contract ClvrIntentPool is IERC1271 {
-    // Mapping of intents from bytes32 hash to intent itself
-    mapping(bytes32 => ClvrLibrary.CLVRIntent) public intents;
+contract ClvrIntentPool {
+    // Mapping from PoolKey to Intents for a pool
+    mapping(bytes32 => mapping(bytes32 => ClvrLibrary.CLVRIntent)) public intents;
 
     constructor() {}
 
@@ -29,17 +29,19 @@ contract ClvrIntentPool is IERC1271 {
             revert("Invalid signature");
         }
 
+        bytes32 poolKey = ClvrLibrary.getPoolKey(intent.tokenIn, intent.tokenOut, intent.fee);
+
         // Store the intent
         // Note: if the intent exists in the mapping, it has been signed already
-        intents[digest] = intent;
+        intents[poolKey][digest] = intent;
     }
 
-    function isValidSignature(
-        bytes32 intentHash,
-        bytes memory
-    ) external pure override returns (bytes4 magicValue) {
-        bytes32 actualHash = keccak256(abi.encode(intentHash));
-        if (actualHash != intentHash) {
+    function intentExists(
+        bytes32 poolKey,
+        bytes32 intentHash
+    ) external view returns (bytes4 magicValue) {
+        ClvrLibrary.CLVRIntent memory intent = intents[poolKey][intentHash];
+        if (intent.creator == ClvrLibrary.EMPTY_ADDRESS) {
             return ClvrLibrary.INVALID_SIGNATURE;
         }
 

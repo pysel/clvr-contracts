@@ -8,4 +8,5 @@ remappings = [
     "@openzeppelin/contracts/=lib/openzeppelin-contracts/contracts/",
     "@uniswap/v3-periphery/=lib/v3-periphery/",
     "@uniswap/v3-core/=lib/v3-core/",
+    "@prb-math/=lib/prb-math/src/",
 ]

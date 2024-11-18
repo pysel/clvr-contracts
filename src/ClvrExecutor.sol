@@ -16,16 +16,22 @@ contract ClvrExecutor {
         swapRouter = ISwapRouter(swapRouter_);
     }
 
-    function executeBatch(ClvrLibrary.CLVRIntent[] memory intents) public {
+    /**
+     * @notice Execute a batch of intents
+     * @param statusQuoPrice The starting price         TODO: get this in contract
+     * @param poolKey The identifier for the pool through which the intents are being executed
+     * @param intents The intents to execute
+     */
+    function executeBatch(uint256 statusQuoPrice, bytes32 poolKey, ClvrLibrary.CLVRIntent[] memory intents) public {
         // uint256[] memory volumes = new uint256[](intents.length);
         for (uint256 i = 0; i < intents.length; i++) {
             bytes32 intentHash = keccak256(abi.encode(intents[i]));
-            bytes4 verification = intentPool.isValidSignature(intentHash, "");
+
+            bytes4 verification = intentPool.intentExists(poolKey, intentHash);
+
             if (verification != ClvrLibrary.MAGICVALUE) {
                 revert("Invalid Intent Passed to Executor");
             }
-
-
         }
     }
 
