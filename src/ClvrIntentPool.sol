@@ -4,11 +4,10 @@ pragma solidity ^0.8.24;
 import "@openzeppelin/contracts/interfaces/IERC1271.sol";
 import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 import "@openzeppelin/contracts/utils/Address.sol";
+import { ClvrLibrary } from "./ClvrLibrary.sol";
+
 
 contract ClvrIntentPool is IERC1271 {
-    using ECDSA for bytes32;
-    using Address for address;
-
     struct CLVRIntent {
         address creator;
         address tokenIn;
@@ -18,12 +17,8 @@ contract ClvrIntentPool is IERC1271 {
         uint256 deadline;
     }
 
-    address internal constant EMPTY_ADDRESS = address(0);
-    bytes4 internal constant MAGICVALUE = 0x1626ba7e;
-    bytes4 internal constant INVALID_SIGNATURE = ~MAGICVALUE;
-
-    // Mapping of hashes to intents
-    mapping(bytes32 => CLVRIntent) public intents;
+    // Array of intents
+    CLVRIntent[] public intents;
 
     constructor() {}
 
@@ -44,20 +39,19 @@ contract ClvrIntentPool is IERC1271 {
         }
 
         // Store the intent
-        // Note: if the intent exists in the mapping, it has been signed already
-        intents[digest] = intent;
+        // Note: if the intent exists in the array, it has been signed already
+        intents.push(intent);
     }
 
     function isValidSignature(
-        bytes32 hash,
+        bytes32 intentsHash,
         bytes memory
     ) external view override returns (bytes4 magicValue) {
-        CLVRIntent memory intent = intents[hash];
-
-        if (intent.recipient == EMPTY_ADDRESS) {
-            return INVALID_SIGNATURE;
+        bytes32 actualHash = keccak256(abi.encode(intents));
+        if (actualHash != intentsHash) {
+            return ClvrLibrary.INVALID_SIGNATURE;
         }
 
-        return MAGICVALUE;
+        return ClvrLibrary.MAGICVALUE;
     }
 }
