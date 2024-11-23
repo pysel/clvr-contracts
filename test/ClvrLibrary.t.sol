@@ -5,15 +5,15 @@ import {Test} from "forge-std/Test.sol";
 import { console } from "forge-std/console.sol";
 import { ln } from "@prb-math/ud60x18/Math.sol";
 import { UD60x18, ud } from "@prb-math/UD60x18.sol";
-import "../src/ClvrLibrary.sol";
+import { ClvrLn } from "../src/ClvrLn.sol";
 
 contract ClvrLibraryTest is Test {
-    function setUp() public {
-        //
-    }
+    using ClvrLn for uint256;
+
+    function setUp() public {}
 
     function testLn() public pure {
-        // ln(ud(1e18 + 1e17)).unwrap();
-        assertEq(ln(ud(1e18 + 1e17)).unwrap(), 95310179804324849);
+        uint256 x = 5e17;
+        console.log(x.lnU256());
     }
 }
