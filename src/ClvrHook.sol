@@ -83,6 +83,7 @@ contract ClvrHook is BaseHook {
     function beforeDonate(address, PoolKey calldata key, uint256, uint256, bytes calldata)
         external
         override
+        view
         returns (bytes4)
     {
         PoolId poolId = key.toId();
@@ -94,7 +95,7 @@ contract ClvrHook is BaseHook {
 
         // ClvrModel.TradeMinimal[] memory trades = swapParamsToTradeMinimalArrays(params);
 
-
+        return BaseHook.beforeDonate.selector;
     }
 
     // function swapParamsToTradeMinimalArrays(SwapParamsExtended[] memory params) internal view returns (ClvrModel.TradeMinimal[] memory) {

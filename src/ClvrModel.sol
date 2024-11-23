@@ -1,11 +1,16 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
 
+import {SafeCast} from "@uniswap/v4-core/src/libraries/SafeCast.sol";
+
 import { ClvrLn } from "./ClvrLn.sol";
 import { ClvrHook } from "./ClvrHook.sol";
 
+import { console } from "forge-std/console.sol";
+
 contract ClvrModel {
     using ClvrLn for uint256;
+    using SafeCast for *;
 
     enum Direction {
         Buy,
@@ -23,17 +28,25 @@ contract ClvrModel {
 
     // PUBLIC FUNCTIONS
 
-    function clvrReorder(uint256 p0, ClvrHook.SwapParamsExtended[] memory o) view public {
+    function clvrReorder(uint256 p0, 
+        ClvrHook.SwapParamsExtended[] memory o, 
+        uint256 reserve_x, 
+        uint256 reserve_y
+    ) public returns (ClvrHook.SwapParamsExtended[] memory) {
+        set_reserve_x(reserve_x);
+        set_reserve_y(reserve_y);
+
+        int128 lnP0 = p0.lnU256().toInt128();
         for (uint256 i = 1; i < o.length; i++) {
             uint256 candidateIndex = i;
-            uint256 unsquaredCandidateValue = p0.lnU256() - P(o, i).lnU256();
-            uint256 candidateValue = unsquaredCandidateValue ** 2;
+            int128 unsquaredCandidateValue = lnP0 - P(o, i).lnU256().toInt128();
+            int256 candidateValue = unsquaredCandidateValue ** 2 / 1e18;
 
             for (uint256 j = i + 1; j < o.length; j++) {
                 swap(o, i, j);
 
-                uint256 unsquaredValue = p0.lnU256() - P(o, i).lnU256();
-                uint256 value = unsquaredValue ** 2;
+                int256 unsquaredValue = lnP0 - P(o, i).lnU256().toInt128();
+                int256 value = unsquaredValue ** 2 / 1e18;
 
                 if (value < candidateValue) {
                     candidateIndex = j;
@@ -47,9 +60,11 @@ contract ClvrModel {
                 swap(o, i, candidateIndex);
             }
         }
+
+        return o;
     }
 
-    function swap(ClvrHook.SwapParamsExtended[] memory o, uint256 i1, uint256 i2) internal view {
+    function swap(ClvrHook.SwapParamsExtended[] memory o, uint256 i1, uint256 i2) internal pure {
         ClvrHook.SwapParamsExtended memory temp = o[i1];
         o[i1] = o[i2];
         o[i2] = temp;
@@ -61,11 +76,11 @@ contract ClvrModel {
         return Y(o, i) * base / X(o, i);
     }
 
-    function set_reserve_x(uint256 reserve_x) public {
+    function set_reserve_x(uint256 reserve_x) internal {
         reserveX = reserve_x;
     }
 
-    function set_reserve_y(uint256 reserve_y) public {
+    function set_reserve_y(uint256 reserve_y) internal {
         reserveY = reserve_y;
     }
 
@@ -109,11 +124,15 @@ contract ClvrModel {
         revert("Invalid call to X");
     }
 
-    function direction(ClvrHook.SwapParamsExtended memory o) private view returns (Direction) {
+    function direction(ClvrHook.SwapParamsExtended memory o) private pure returns (Direction) {
+        if (o.recepient == address(0)) {
+            return Direction.NULL;
+        }
+
         return o.params.zeroForOne ? Direction.Buy : Direction.Sell;
     }
 
-    function amountIn(ClvrHook.SwapParamsExtended memory o) private view returns (uint256) {
+    function amountIn(ClvrHook.SwapParamsExtended memory o) private pure returns (uint256) {
         return uint256(-o.params.amountSpecified);
     }
 }

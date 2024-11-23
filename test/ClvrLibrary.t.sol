@@ -13,7 +13,7 @@ contract ClvrLibraryTest is Test {
     function setUp() public {}
 
     function testLn() public pure {
-        uint256 x = 5e17;
+        uint256 x = 1e18;
         console.log(x.lnU256());
     }
 }
