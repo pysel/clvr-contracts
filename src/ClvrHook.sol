@@ -8,9 +8,12 @@ import {IPoolManager} from "@uniswap/v4-core/src/interfaces/IPoolManager.sol";
 import {PoolKey} from "@uniswap/v4-core/src/types/PoolKey.sol";
 import {PoolId, PoolIdLibrary} from "@uniswap/v4-core/src/types/PoolId.sol";
 import {BalanceDelta} from "@uniswap/v4-core/src/types/BalanceDelta.sol";
-import {BeforeSwapDelta, BeforeSwapDeltaLibrary} from "@uniswap/v4-core/src/types/BeforeSwapDelta.sol";
+import {BeforeSwapDelta, BeforeSwapDeltaLibrary, toBeforeSwapDelta } from "@uniswap/v4-core/src/types/BeforeSwapDelta.sol";
 import {Currency} from "@uniswap/v4-core/src/types/Currency.sol";
 import {SafeCast} from "@uniswap/v4-core/src/libraries/SafeCast.sol";
+import {StateLibrary} from "v4-core/libraries/StateLibrary.sol";
+
+import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 
 import { ClvrIntentPool } from "./ClvrIntentPool.sol";
 import { ClvrModel } from "./ClvrModel.sol";
@@ -18,13 +21,17 @@ import { ClvrModel } from "./ClvrModel.sol";
 
 contract ClvrHook is BaseHook {
     using SafeCast for *;
+    using StateLibrary for IPoolManager;
 
     struct SwapParamsExtended {
         address recepient;
         IPoolManager.SwapParams params;
     }
 
+    address private constant BATCH = address(0);
+
     mapping(PoolId => SwapParamsExtended[]) public swapParams;
+
     ClvrModel private model;
 
     constructor(IPoolManager _manager) BaseHook(_manager) {}
@@ -62,12 +69,16 @@ contract ClvrHook is BaseHook {
         require(params.amountSpecified < 0, "Clvr Pools only work with exact input swaps");
 
         PoolId poolId = PoolIdLibrary.toId(key);
+        address recepient = abi.decode(data, (address));
+
+        if (recepient == BATCH) { // TODO: make sure this can't easily be called
+            // perform the swap right away
+            return (BaseHook.beforeSwap.selector, BeforeSwapDeltaLibrary.ZERO_DELTA, 0);
+        }
 
         Currency input = params.zeroForOne ? key.currency0 : key.currency1;
         uint256 amountTaken = uint256(params.amountSpecified);
         poolManager.mint(address(this), input.toId(), amountTaken);
-
-        address recepient = abi.decode(data, (address));
 
         SwapParamsExtended memory paramsE = SwapParamsExtended({
             recepient: recepient,
@@ -77,13 +88,12 @@ contract ClvrHook is BaseHook {
         // Store the swap params
         swapParams[poolId].push(paramsE);
 
-        return (BaseHook.beforeSwap.selector, BeforeSwapDeltaLibrary.ZERO_DELTA, 0);
+        return (BaseHook.beforeSwap.selector, toBeforeSwapDelta(amountTaken.toInt128(), 0), 0);
     }
 
     function beforeDonate(address, PoolKey calldata key, uint256, uint256, bytes calldata)
         external
         override
-        view
         returns (bytes4)
     {
         PoolId poolId = key.toId();
@@ -93,30 +103,27 @@ contract ClvrHook is BaseHook {
             return BaseHook.beforeDonate.selector;
         }
 
-        // ClvrModel.TradeMinimal[] memory trades = swapParamsToTradeMinimalArrays(params);
+        (uint160 sqrtPriceX96, , ,) = poolManager.getSlot0(poolId);
+        uint256 decimals = 10 ** ERC20(Currency.unwrap(key.currency1)).decimals();
+        uint256 sqrtPrice = (sqrtPriceX96 * decimals) / 2 ** 96; // get sqrtPrice with decimals of token
+        uint256 currentPrice = sqrtPrice ** 2 / decimals;
+
+        params = model.clvrReorder(currentPrice, params, currentPrice * 1e18, 1e18/currentPrice); // currentPrice hack to simulate token amounts
+
+        for (uint256 i = 0; i < params.length; i++) {
+            poolManager.swap(
+                key,
+                params[i].params,
+                abi.encode(BATCH)
+            );
+        }
 
         return BaseHook.beforeDonate.selector;
     }
 
-    // function swapParamsToTradeMinimalArrays(SwapParamsExtended[] memory params) internal view returns (ClvrModel.TradeMinimal[] memory) {
-    //     ClvrModel.TradeMinimal[] memory tradeMinimals = new ClvrModel.TradeMinimal[](params.length);
-
-    //     // append null trade at the beginning
-    //     tradeMinimals[0] = ClvrModel.TradeMinimal({
-    //         direction: ClvrModel.Direction.NULL,
-    //         amountIn: 0
-    //     });
-
-    //     for (uint256 i = 0; i < params.length; i++) {
-    //         tradeMinimals[i + 1] = swapParamsToTradeMinimal(params[i]);
-    //     }
-    //     return tradeMinimals;
+    // function sqrtPriceX96ToPrice(uint160 sqrtPriceX96) internal pure returns (uint256) {
+    //     uint256 priceX96 = uint256(sqrtPriceX96).mul(uint256(sqrtPriceX96)).mul(1e18) >> (96 * 2);
+    //     return priceX96;
     // }
 
-    // function swapParamsToTradeMinimal(SwapParamsExtended memory params) internal view returns (ClvrModel.TradeMinimal memory) {
-    //     return ClvrModel.TradeMinimal({
-    //         direction: params.params.zeroForOne ? ClvrModel.Direction.Buy : ClvrModel.Direction.Sell,
-    //         amountIn: uint256(-params.params.amountSpecified)
-    //     });
-    // }
 }
