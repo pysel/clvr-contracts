@@ -47,6 +47,7 @@ contract ClvrHook is BaseHook, ClvrStake {
     address private constant BATCH = address(0);
 
     mapping(PoolId => mapping(bytes32 => SwapParamsExtended)) public swapParams; // per pool scheduled swaps (their params)
+    mapping(PoolId => uint256) public swaps; // per pool amount of scheduled swaps
 
     ClvrModel private model;
     PoolSwapTest swapRouter;
@@ -124,6 +125,7 @@ contract ClvrHook is BaseHook, ClvrStake {
 
         // Store the swap params
         swapParams[poolId][swapId] = paramsE;
+        swaps[poolId]++;
 
         emit SwapScheduled(poolId, sender);
 
@@ -139,10 +141,47 @@ contract ClvrHook is BaseHook, ClvrStake {
         PoolKey calldata key,
         uint256,
         uint256,
-        bytes calldata data
+        bytes calldata data // array of swapIds encoded as bytes32[]
     ) external override onlyStakedScheduler(key, sender) returns (bytes4) {
         PoolId poolId = key.toId();
 
+        bytes32[] memory swapIds = abi.decode(data, (bytes32[]));
+        require(swaps[poolId] == swapIds.length, "All scheduled swaps must be executed");
+
+        for (uint256 i = 0; i < swapIds.length; ) {
+            SwapParamsExtended memory paramsE = swapParams[poolId][swapIds[i]];
+
+            // Execute the swap
+            poolManager.swap(key, paramsE.params, abi.encode(BATCH));
+
+            int256 delta0 = poolManager.currencyDelta(address(this), key.currency0);
+            int256 delta1 = poolManager.currencyDelta(address(this), key.currency1);
+
+            if (delta0 < 0) {
+                key.currency0.settle(poolManager, address(this), uint256(-delta0), true);
+            }
+            
+            if (delta1 < 0) {
+                key.currency1.settle(poolManager, address(this), uint256(-delta1), true);
+            }
+
+            if (delta0 > 0) {
+                key.currency0.take(poolManager, paramsE.recepient, uint256(delta0), false);
+            }
+
+            if (delta1 > 0) {
+                key.currency1.take(poolManager, paramsE.recepient, uint256(delta1), false);
+            }
+
+            delete swapParams[poolId][swapIds[i]];
+
+            unchecked {
+                i++;
+            }
+        }
+
+        swaps[poolId] = 0;
+        
         return BaseHook.beforeDonate.selector;
     }
 
