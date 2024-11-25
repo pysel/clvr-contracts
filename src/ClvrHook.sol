@@ -46,7 +46,7 @@ contract ClvrHook is BaseHook, ClvrStake {
 
     address private constant BATCH = address(0);
 
-    mapping(PoolId => SwapParamsExtended[]) public swapParams; // per pool scheduled swaps (their params)
+    mapping(PoolId => mapping(bytes32 => SwapParamsExtended)) public swapParams; // per pool scheduled swaps (their params)
 
     ClvrModel private model;
     PoolSwapTest swapRouter;
@@ -97,7 +97,7 @@ contract ClvrHook is BaseHook, ClvrStake {
 
         if (recepient == BATCH) {
             if (!isStakedScheduler(key, sender)) {
-                revert("Only staked schedulers can schedule swaps");
+                revert("Only staked schedulers can schedule batched swaps");
             }
 
             return (
@@ -120,8 +120,10 @@ contract ClvrHook is BaseHook, ClvrStake {
             params: params
         });
 
+        bytes32 swapId = keccak256(abi.encode(sender, params));
+
         // Store the swap params
-        swapParams[poolId].push(paramsE);
+        swapParams[poolId][swapId] = paramsE;
 
         emit SwapScheduled(poolId, sender);
 
@@ -133,58 +135,13 @@ contract ClvrHook is BaseHook, ClvrStake {
     }
 
     function beforeDonate(
-        address,
+        address sender,
         PoolKey calldata key,
         uint256,
         uint256,
-        bytes calldata
-    ) external override returns (bytes4) {
+        bytes calldata data
+    ) external override onlyStakedScheduler(key, sender) returns (bytes4) {
         PoolId poolId = key.toId();
-
-        SwapParamsExtended[] memory params = swapParams[poolId];
-        if (params.length == 0) {
-            return BaseHook.beforeDonate.selector;
-        }
-
-        uint256 currentPrice = getCurrentPrice(key);
-
-        params = model.clvrReorder(
-            currentPrice,
-            params,
-            currentPrice,
-            1e18
-        ); // currentPrice hack to simulate token amounts
-
-        for (uint256 i = 0; i < params.length; ) {
-            poolManager.swap(key, params[i].params, abi.encode(BATCH));
-
-            int256 delta0 = poolManager.currencyDelta(address(this), key.currency0);
-            int256 delta1 = poolManager.currencyDelta(address(this), key.currency1);
-
-            if (delta0 < 0) {
-                key.currency0.settle(poolManager, address(this), uint256(-delta0), true);
-            }
-            
-            if (delta1 < 0) {
-                key.currency1.settle(poolManager, address(this), uint256(-delta1), true);
-            }
-
-            if (delta0 > 0) {
-                key.currency0.take(poolManager, params[i].recepient, uint256(delta0), false);
-            }
-
-            if (delta1 > 0) {
-                key.currency1.take(poolManager, params[i].recepient, uint256(delta1), false);
-            }
-
-            unchecked {
-                i++;
-            }
-        }
-
-        delete swapParams[poolId];
-
-        emit BatchCompleted(poolId);
 
         return BaseHook.beforeDonate.selector;
     }

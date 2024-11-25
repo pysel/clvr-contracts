@@ -10,8 +10,8 @@ contract ClvrStake {
 
     mapping(PoolId => mapping(address => bool)) public stakedSchedulers; // per pool addresses that can schedule swaps
 
-    modifier onlyStakedScheduler(PoolKey calldata key) {
-        require(isStakedScheduler(key, msg.sender), "Only staked schedulers can call this function");
+    modifier onlyStakedScheduler(PoolKey calldata key, address scheduler) {
+        require(isStakedScheduler(key, scheduler), "Only staked schedulers can call this function");
         _;
     }
 
@@ -22,7 +22,7 @@ contract ClvrStake {
         stakedSchedulers[key.toId()][scheduler] = true;
     }
 
-    function unstake(PoolKey calldata key, address scheduler) external onlyStakedScheduler(key) {
+    function unstake(PoolKey calldata key, address scheduler) external onlyStakedScheduler(key, scheduler) {
         stakedSchedulers[key.toId()][scheduler] = false;
         payable(msg.sender).transfer(STAKE_AMOUNT);
     }
