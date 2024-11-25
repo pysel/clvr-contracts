@@ -128,8 +128,6 @@ contract ClvrHookTest is Test, Deployers, Fixtures {
         }
     }
 
-    // function approveHookForUsers() public {
-
     function testHookSanity() public {
         dealCurrencyToUsers();
         approveSwapRouter();
@@ -140,12 +138,6 @@ contract ClvrHookTest is Test, Deployers, Fixtures {
 
         int256 amount = -1e18;
         bool zeroForOne = true;
-        // console.log(currency0.balanceOf(address(this)));
-        // console.log(currency1.balanceOf(address(this)));
-        // console.log();
-
-        // console.log(currency0.balanceOf(sender));
-        // console.log(currency1.balanceOf(sender));
 
         uint256 c0balance = currency0.balanceOf(sender);
         uint256 c1balance = currency1.balanceOf(sender);
@@ -157,21 +149,8 @@ contract ClvrHookTest is Test, Deployers, Fixtures {
         require(currency0.balanceOf(sender) + uint256(-amount) == c0balance, "Currency0 balance should be decreased by amount");
         require(currency1.balanceOf(sender) == c1balance, "Currency1 balance should not be changed");
 
-        // console.log(currency0.balanceOf(address(this)));
-        // console.log(currency1.balanceOf(address(this)));
-        // console.log();
-
-        // console.log(currency1.balanceOf(sender));
-        // console.log(currency0.balanceOf(sender));
-        // console.log(currency1.balanceOf(address(hook)));
-
-        // console.log(currency1.balanceOf(sender));
         donateRouter.donate(key, 0, 0, "");
 
         require(currency1.balanceOf(sender) > c1balance, "Swap should have increased currency1 balance");
-
-        // console.log(currency1.balanceOf(sender));
-        // console.log(currency0.balanceOf(sender));
-        // console.log(currency1.balanceOf(address(hook)));
     }
 }

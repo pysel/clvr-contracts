@@ -8,7 +8,7 @@ import { ClvrHook } from "./ClvrHook.sol";
 import {IPoolManager} from "@uniswap/v4-core/src/interfaces/IPoolManager.sol";
 
 
-import { console } from "forge-std/console.sol";
+// import { console } from "forge-std/console.sol";
 
 contract ClvrModel {
     using ClvrLn for uint256;

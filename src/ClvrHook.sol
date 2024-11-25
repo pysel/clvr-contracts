@@ -21,7 +21,7 @@ import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import { ClvrIntentPool } from "./ClvrIntentPool.sol";
 import { ClvrModel } from "./ClvrModel.sol";
 import {PoolSwapTest} from "@uniswap/v4-core/src/test/PoolSwapTest.sol";
-import {console} from "forge-std/console.sol";
+// import {console} from "forge-std/console.sol";
 
 
 contract ClvrHook is BaseHook {
@@ -76,7 +76,7 @@ contract ClvrHook is BaseHook {
     }
 
     function beforeSwap(
-        address,
+        address sender,
         PoolKey calldata key,
         IPoolManager.SwapParams calldata params,
         bytes calldata data
@@ -105,7 +105,7 @@ contract ClvrHook is BaseHook {
         poolManager.mint(address(this), input.toId(), amountTaken);
 
         SwapParamsExtended memory paramsE = SwapParamsExtended({
-            sender: tx.origin,
+            sender: sender,
             recepient: recepient,
             params: params
         });
