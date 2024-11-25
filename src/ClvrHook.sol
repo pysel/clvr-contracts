@@ -21,7 +21,7 @@ import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import { ClvrIntentPool } from "./ClvrIntentPool.sol";
 import { ClvrModel } from "./ClvrModel.sol";
 import {PoolSwapTest} from "@uniswap/v4-core/src/test/PoolSwapTest.sol";
-// import {console} from "forge-std/console.sol";
+import {console} from "forge-std/console.sol";
 
 
 contract ClvrHook is BaseHook {
@@ -30,6 +30,10 @@ contract ClvrHook is BaseHook {
     using BalanceDeltaLibrary for BalanceDelta;
     using TransientStateLibrary for IPoolManager;
     using CurrencySettler for Currency;
+
+    event BatchCompleted(PoolId poolId);
+
+    event SwapScheduled(PoolId poolId, address sender);
 
     struct SwapParamsExtended {
         address sender;
@@ -86,7 +90,6 @@ contract ClvrHook is BaseHook {
             "Clvr Pools only work with exact input swaps"
         );
 
-        PoolId poolId = PoolIdLibrary.toId(key);
         address recepient = abi.decode(data, (address));
 
         if (recepient == BATCH) {
@@ -98,6 +101,8 @@ contract ClvrHook is BaseHook {
                 0
             );
         }
+
+        PoolId poolId = PoolIdLibrary.toId(key);
 
         // the hook takes the exact amount of the input currency to itself
         Currency input = params.zeroForOne ? key.currency0 : key.currency1;
@@ -112,6 +117,8 @@ contract ClvrHook is BaseHook {
 
         // Store the swap params
         swapParams[poolId].push(paramsE);
+
+        emit SwapScheduled(poolId, sender);
 
         return (
             BaseHook.beforeSwap.selector,
@@ -139,21 +146,15 @@ contract ClvrHook is BaseHook {
         params = model.clvrReorder(
             currentPrice,
             params,
-            currentPrice * 1e18,
-            1e18 / currentPrice
+            currentPrice,
+            1e18
         ); // currentPrice hack to simulate token amounts
 
-        for (uint256 i = 1; i < params.length; i++) {
-            // PoolSwapTest.TestSettings memory testSettings =
-            //     PoolSwapTest.TestSettings({takeClaims: false, settleUsingBurn: false});
-            // swapRouter.swap(key, params[i].params, testSettings, abi.encode(BATCH));
+        for (uint256 i = 0; i < params.length; ) {
             poolManager.swap(key, params[i].params, abi.encode(BATCH));
 
             int256 delta0 = poolManager.currencyDelta(address(this), key.currency0);
             int256 delta1 = poolManager.currencyDelta(address(this), key.currency1);
-
-            // console.log(delta0);
-            // console.log(delta1);
 
             if (delta0 < 0) {
                 key.currency0.settle(poolManager, address(this), uint256(-delta0), true);
@@ -170,7 +171,15 @@ contract ClvrHook is BaseHook {
             if (delta1 > 0) {
                 key.currency1.take(poolManager, params[i].recepient, uint256(delta1), false);
             }
+
+            unchecked {
+                i++;
+            }
         }
+
+        delete swapParams[poolId];
+
+        emit BatchCompleted(poolId);
 
         return BaseHook.beforeDonate.selector;
     }

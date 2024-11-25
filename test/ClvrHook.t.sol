@@ -35,10 +35,12 @@ contract ClvrHookTest is Test, Deployers, Fixtures {
     using EasyPosm for IPositionManager;
     using StateLibrary for IPoolManager;
 
+    bool DEBUG = true;
+
     PoolId poolId;
     ClvrHook hook;
 
-    address[5] users;
+    address[10] users;
 
     uint256 tokenId;
     int24 tickLower;
@@ -101,6 +103,11 @@ contract ClvrHookTest is Test, Deployers, Fixtures {
         users[2] = makeAddr("Carol");
         users[3] = makeAddr("3");
         users[4] = makeAddr("4");
+        users[5] = makeAddr("5");
+        users[6] = makeAddr("6");
+        users[7] = makeAddr("7");
+        users[8] = makeAddr("8");
+        users[9] = makeAddr("9");
     }
 
     function dealCurrencyToUsers() internal {
@@ -111,7 +118,7 @@ contract ClvrHookTest is Test, Deployers, Fixtures {
     }
 
     function approveSwapRouter() internal {
-        for (uint256 i = 0; i < 5; i++) {
+        for (uint256 i = 0; i < users.length; i++) {
             vm.startPrank(users[i]);
             ERC20(Currency.unwrap(currency0)).approve(address(swapRouter), type(uint256).max);
             ERC20(Currency.unwrap(currency1)).approve(address(swapRouter), type(uint256).max);
@@ -120,7 +127,7 @@ contract ClvrHookTest is Test, Deployers, Fixtures {
     }
 
     function approveHook() internal {
-        for (uint256 i = 0; i < 5; i++) {
+        for (uint256 i = 0; i < users.length; i++) {
             vm.startPrank(users[i]);
             ERC20(Currency.unwrap(currency0)).approve(address(hook), type(uint256).max);
             ERC20(Currency.unwrap(currency1)).approve(address(hook), type(uint256).max);
@@ -149,8 +156,88 @@ contract ClvrHookTest is Test, Deployers, Fixtures {
         require(currency0.balanceOf(sender) + uint256(-amount) == c0balance, "Currency0 balance should be decreased by amount");
         require(currency1.balanceOf(sender) == c1balance, "Currency1 balance should not be changed");
 
-        donateRouter.donate(key, 0, 0, "");
+        executeBatch();
 
         require(currency1.balanceOf(sender) > c1balance, "Swap should have increased currency1 balance");
+    }
+
+    function testHookMultipleSwaps() public {
+        dealCurrencyToUsers();
+        approveSwapRouter();
+        approveHook();
+
+        oneBatch();
+    }
+
+    function testHookMultipleBatches() public {
+        dealCurrencyToUsers();
+        approveSwapRouter();
+        approveHook();
+
+        uint256 batches = 10;
+
+        for (uint256 i = 0; i < batches; i++) {
+            oneBatch();
+        }
+    }
+
+    function oneBatch() internal {
+        uint256[] memory c0balances = new uint256[](users.length);
+        uint256[] memory c1balances = new uint256[](users.length);
+
+        for (uint256 i = 0; i < users.length; i++) {
+            c0balances[i] = currency0.balanceOf(users[i]);
+            c1balances[i] = currency1.balanceOf(users[i]);
+        }
+
+        sendSwaps();
+
+        // check that tokenIn balance has been taken from the user
+        // check that tokenOut balance is the same as the initial balance
+        for (uint256 i = 0; i < users.length; i++) {
+            bool zeroForOne = i % 2 == 0 ? true : false;
+            if (zeroForOne) {
+                require(currency0.balanceOf(users[i]) + 1e18 == c0balances[i], "Currency0 balance should be decreased by 1e18");
+                require(currency1.balanceOf(users[i]) == c1balances[i], "Currency1 balance should not be changed");
+            } else {
+                require(currency0.balanceOf(users[i]) == c0balances[i], "Currency0 balance should not be changed");
+                require(currency1.balanceOf(users[i]) + 1e18 == c1balances[i], "Currency1 balance should be decreased by 1e18");
+            }
+        }
+
+        uint256 gas = gasleft();
+        executeBatch();
+        if (DEBUG) {
+            console.log("Gas used in donate: ", gas - gasleft());
+        }
+
+        for (uint256 i = 0; i < users.length; i++) {
+            bool zeroForOne = i % 2 == 0 ? true : false;
+            if (zeroForOne) { // true -> getting token1 in exchange for token0, hence, token1 should increase
+                require(currency1.balanceOf(users[i]) > c1balances[i], "Currency1 balance should be increased");
+            } else {
+                require(currency0.balanceOf(users[i]) > c0balances[i], "Currency0 balance should be increased");
+            }
+        }
+    }
+
+    function sendSwaps() internal {
+        for (uint256 i = 0; i < users.length; i++) {
+            vm.startPrank(users[i], users[i]);
+
+            uint256 gas = gasleft();
+            // 0 -> buy quote, 1 -> sell quote, 2 -> buy quote, 3 -> sell quote, 4 -> buy quote
+            swap(key, i % 2 == 0 ? true : false, -1e18, abi.encode(users[i]));
+
+            if (DEBUG) {
+                console.log("Gas used in swap [", i, "]: ", gas - gasleft());
+            }
+
+            vm.stopPrank();
+        }
+    }
+
+    function executeBatch() internal {
+        donateRouter.donate(key, 0, 0, "");
     }
 }
