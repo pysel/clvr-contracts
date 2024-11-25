@@ -24,16 +24,16 @@ contract ClvrModelTest is Test {
      */
     function testModel() public {
         ClvrHook.SwapParamsExtended[] memory o = new ClvrHook.SwapParamsExtended[](4);
-        o[0] = ClvrHook.SwapParamsExtended(address(0), IPoolManager.SwapParams(false, 0, 0)); // first one is mock (address = 0)
-        o[3] = ClvrHook.SwapParamsExtended(address(1), IPoolManager.SwapParams(BUY, -10e18, 0));
-        o[1] = ClvrHook.SwapParamsExtended(address(1), IPoolManager.SwapParams(SELL, -5e18, 0)); 
-        o[2] = ClvrHook.SwapParamsExtended(address(1), IPoolManager.SwapParams(SELL, -2e18, 0)); 
+        o[0] = ClvrHook.SwapParamsExtended(address(0), address(0), IPoolManager.SwapParams(false, 0, 0)); // first one is mock (address = 0)
+        o[3] = ClvrHook.SwapParamsExtended(address(1), address(1), IPoolManager.SwapParams(BUY, -10e18, 0));
+        o[1] = ClvrHook.SwapParamsExtended(address(1), address(1), IPoolManager.SwapParams(SELL, -5e18, 0)); 
+        o[2] = ClvrHook.SwapParamsExtended(address(1), address(1), IPoolManager.SwapParams(SELL, -2e18, 0)); 
 
         ClvrHook.SwapParamsExtended[] memory expected = new ClvrHook.SwapParamsExtended[](4);
-        expected[0] = ClvrHook.SwapParamsExtended(address(0), IPoolManager.SwapParams(false, 0, 0));
-        expected[1] = ClvrHook.SwapParamsExtended(address(1), IPoolManager.SwapParams(SELL, -2e18, 0));
-        expected[2] = ClvrHook.SwapParamsExtended(address(1), IPoolManager.SwapParams(SELL, -5e18, 0));
-        expected[3] = ClvrHook.SwapParamsExtended(address(1), IPoolManager.SwapParams(BUY, -10e18, 0));
+        expected[0] = ClvrHook.SwapParamsExtended(address(0), address(0), IPoolManager.SwapParams(false, 0, 0));
+        expected[1] = ClvrHook.SwapParamsExtended(address(1), address(1), IPoolManager.SwapParams(SELL, -2e18, 0));
+        expected[2] = ClvrHook.SwapParamsExtended(address(1), address(1), IPoolManager.SwapParams(SELL, -5e18, 0));
+        expected[3] = ClvrHook.SwapParamsExtended(address(1), address(1), IPoolManager.SwapParams(BUY, -10e18, 0));
 
         uint256 gas = gasleft();
 

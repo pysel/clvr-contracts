@@ -5,6 +5,8 @@ import {SafeCast} from "@uniswap/v4-core/src/libraries/SafeCast.sol";
 
 import { ClvrLn } from "./ClvrLn.sol";
 import { ClvrHook } from "./ClvrHook.sol";
+import {IPoolManager} from "@uniswap/v4-core/src/interfaces/IPoolManager.sol";
+
 
 import { console } from "forge-std/console.sol";
 
@@ -33,16 +35,21 @@ contract ClvrModel {
         uint256 reserve_x, 
         uint256 reserve_y
     ) public returns (ClvrHook.SwapParamsExtended[] memory) {
+        o = addMockTrade(o);
+
+        // console.log("ENTERED FUNCTION");
         set_reserve_x(reserve_x);
         set_reserve_y(reserve_y);
 
         int128 lnP0 = p0.lnU256().toInt128();
         for (uint256 i = 1; i < o.length; i++) {
+            // console.log("ENTERED LOOP");
             uint256 candidateIndex = i;
             int128 unsquaredCandidateValue = lnP0 - P(o, i).lnU256().toInt128();
             int256 candidateValue = unsquaredCandidateValue ** 2 / 1e18;
 
             for (uint256 j = i + 1; j < o.length; j++) {
+                // console.log("ENTERED INNER LOOP");
                 swap(o, i, j);
 
                 int256 unsquaredValue = lnP0 - P(o, i).lnU256().toInt128();
@@ -62,6 +69,18 @@ contract ClvrModel {
         }
 
         return o;
+    }
+
+    // adds a mock trade as a first entry of th array
+    function addMockTrade(ClvrHook.SwapParamsExtended[] memory o) internal pure returns(ClvrHook.SwapParamsExtended[] memory) {
+        ClvrHook.SwapParamsExtended memory mock = ClvrHook.SwapParamsExtended(address(0), address(0), IPoolManager.SwapParams(false, 0, 0));
+        ClvrHook.SwapParamsExtended[] memory newO = new ClvrHook.SwapParamsExtended[](o.length + 1);
+        for (uint256 i = 0; i < o.length; i++) {
+            newO[i] = o[i];
+        }
+        newO[o.length] = o[0];
+        newO[0] = mock;
+        return newO;
     }
 
     function swap(ClvrHook.SwapParamsExtended[] memory o, uint256 i1, uint256 i2) internal pure {
