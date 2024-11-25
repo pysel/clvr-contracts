@@ -21,10 +21,13 @@ import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import { ClvrIntentPool } from "./ClvrIntentPool.sol";
 import { ClvrModel } from "./ClvrModel.sol";
 import {PoolSwapTest} from "@uniswap/v4-core/src/test/PoolSwapTest.sol";
+
+import {ClvrStake} from "./ClvrStake.sol";
+
 import {console} from "forge-std/console.sol";
 
 
-contract ClvrHook is BaseHook {
+contract ClvrHook is BaseHook, ClvrStake {
     using SafeCast for *;
     using StateLibrary for IPoolManager;
     using BalanceDeltaLibrary for BalanceDelta;
@@ -43,7 +46,7 @@ contract ClvrHook is BaseHook {
 
     address private constant BATCH = address(0);
 
-    mapping(PoolId => SwapParamsExtended[]) public swapParams;
+    mapping(PoolId => SwapParamsExtended[]) public swapParams; // per pool scheduled swaps (their params)
 
     ClvrModel private model;
     PoolSwapTest swapRouter;
@@ -93,8 +96,10 @@ contract ClvrHook is BaseHook {
         address recepient = abi.decode(data, (address));
 
         if (recepient == BATCH) {
-            // TODO: make sure this can't easily be called
-            // perform the swap right away
+            if (!isStakedScheduler(key, sender)) {
+                revert("Only staked schedulers can schedule swaps");
+            }
+
             return (
                 BaseHook.beforeSwap.selector,
                 BeforeSwapDeltaLibrary.ZERO_DELTA,
