@@ -200,6 +200,42 @@ contract ClvrHook is BaseHook, ClvrStake, ClvrSlashing {
         return BaseHook.beforeDonate.selector;
     }
 
+    // STAKING
+
+    /// @notice Stakes the scheduler for the pool
+    /// @param key The pool key
+    /// @param scheduler The scheduler address
+    function stake(PoolKey calldata key, address scheduler) payable public {
+        require(msg.value == STAKE_AMOUNT, "Must stake 1 ETH to stake");
+        _stake(key, scheduler);
+    }
+
+    /// @notice Unstakes the scheduler from the pool
+    /// @notice Can only be called if the scheduler has no recent batches (so there is time to dispute their latest batches)
+    /// @param key The pool key
+    /// @param scheduler The scheduler address
+    function unstake(PoolKey calldata key, address scheduler) external onlyStakedScheduler(key, scheduler) {
+        for (uint256 i = 0; i < ClvrSlashing.BATCH_RETENTION_PERIOD; i++) {
+            if (retainedBatches[key.toId()][i].creator == scheduler) {
+                revert("Scheduler has a recent batch, wait for it to be displaced by newer batches");
+            }
+        }
+
+        _unstake(key, scheduler);
+
+        payable(msg.sender).transfer(STAKE_AMOUNT);
+    }
+
+    function disputeBatch(PoolKey calldata key, uint256 batchIndex, uint256[] memory betterReordering) public {
+        bytes4 magic = _disputeBatch(key, batchIndex, betterReordering);
+        if (magic == ClvrSlashing.BATCH_DISPUTED_MAGIC_VALUE) {
+            payable(msg.sender).transfer(ClvrStake.STAKE_AMOUNT);
+        }
+
+        address slashedCreator = retainedBatches[key.toId()][batchIndex].creator;
+        _unstake(key, slashedCreator); // unstakes without paying back the stake to the batch creator
+    }
+
     function getCurrentPrice(PoolKey calldata key) view internal returns (uint256) {
         (uint160 sqrtPriceX96, , , ) = poolManager.getSlot0(key.toId());
         uint256 decimals = 10 **
