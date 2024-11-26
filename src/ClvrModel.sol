@@ -23,12 +23,47 @@ contract ClvrModel {
     uint256 public reserveY;
     uint256 public reserveX;
 
+    modifier sameLength(ClvrHook.SwapParamsExtended[] memory o1, ClvrHook.SwapParamsExtended[] memory o2) {
+        require(o1.length == o2.length, "Orderings must be of the same length");
+        _;
+    }
+
+
     constructor(uint256 reserve_y, uint256 reserve_x) {
         reserveY = reserve_y;
         reserveX = reserve_x;
     }
 
     // PUBLIC FUNCTIONS
+
+    /// @notice Checks if the candidate ordering is better than the challenged ordering
+    /// @notice Candidate ordering is better if the CLVR value is lower at any step
+    /// @param p0 The initial price
+    /// @param challengedOrdering The ordering to be challenged
+    /// @param candidateOrdering The ordering to be checked
+    /// @return True if the candidate ordering is better, false otherwise
+    function isBetterOrdering(uint256 p0, ClvrHook.SwapParamsExtended[] memory challengedOrdering, ClvrHook.SwapParamsExtended[] memory candidateOrdering) 
+    public view sameLength(challengedOrdering, candidateOrdering) returns (bool) 
+    {
+        challengedOrdering = addMockTrade(challengedOrdering);
+        candidateOrdering = addMockTrade(candidateOrdering);
+
+        int128 lnP0 = p0.lnU256().toInt128();
+        for (uint256 i = 1; i < challengedOrdering.length; i++) {
+            int128 unsquaredChallengedValue = lnP0 - P(challengedOrdering, i).lnU256().toInt128();
+            int256 challengedValue = unsquaredChallengedValue ** 2 / 1e18;
+
+            int128 unsquaredCandidateValue = lnP0 - P(candidateOrdering, i).lnU256().toInt128();
+            int256 candidateValue = unsquaredCandidateValue ** 2 / 1e18;
+
+            // the candidate ordering is better because the value is lower
+            if (candidateValue < challengedValue) {
+                return true;
+            }
+        }
+
+        return false;
+    }
 
     function clvrReorder(uint256 p0, 
         ClvrHook.SwapParamsExtended[] memory o, 
