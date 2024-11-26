@@ -152,16 +152,16 @@ contract ClvrHook is BaseHook, ClvrStake, ClvrSlashing {
     }
 
     function beforeDonate(
-        address sender,
+        address,
         PoolKey calldata key,
         uint256,
         uint256,
         bytes calldata data // array of swapIds encoded as bytes32[]
-    ) external override onlyStakedScheduler(key, sender) returns (bytes4) {
+    ) external override onlyStakedScheduler(key, tx.origin) returns (bytes4) { // origin because the hook is called by a proxy contract
         PoolId poolId = key.toId();
 
         uint256[] memory swapIds = abi.decode(data, (uint256[]));
-        require(nextSwapKey[poolId] == swapIds.length, "All scheduled swaps must be executed");
+        require(nextSwapKey[poolId] == swapIds.length, "Swap Ids length does not match the size of the scheduled swaps");
 
         for (uint256 i = 0; i < swapIds.length; ) {
             SwapParamsExtended memory paramsE = swapParams[poolId][swapIds[i]];
@@ -206,22 +206,22 @@ contract ClvrHook is BaseHook, ClvrStake, ClvrSlashing {
     /// @param key The pool key
     /// @param scheduler The scheduler address
     function stake(PoolKey calldata key, address scheduler) payable public {
-        require(msg.value == STAKE_AMOUNT, "Must stake 1 ETH to stake");
+        require(msg.value == STAKE_AMOUNT, "Must stake at least 1 ETH");
         _stake(key, scheduler);
     }
 
     /// @notice Unstakes the scheduler from the pool
     /// @notice Can only be called if the scheduler has no recent batches (so there is time to dispute their latest batches)
+    /// @dev The scheduler address is the sender of the transaction
     /// @param key The pool key
-    /// @param scheduler The scheduler address
-    function unstake(PoolKey calldata key, address scheduler) external onlyStakedScheduler(key, scheduler) {
+    function unstake(PoolKey calldata key) public onlyStakedScheduler(key, msg.sender) {
         for (uint256 i = 0; i < ClvrSlashing.BATCH_RETENTION_PERIOD; i++) {
-            if (retainedBatches[key.toId()][i].creator == scheduler) {
+            if (retainedBatches[key.toId()][i].creator == msg.sender) {
                 revert("Scheduler has a recent batch, wait for it to be displaced by newer batches");
             }
         }
 
-        _unstake(key, scheduler);
+        _unstake(key, msg.sender);
 
         payable(msg.sender).transfer(STAKE_AMOUNT);
     }

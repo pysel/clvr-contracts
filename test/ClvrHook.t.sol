@@ -40,7 +40,11 @@ contract ClvrHookTest is Test, Deployers, Fixtures {
     PoolId poolId;
     ClvrHook hook;
 
-    address[10] users;
+    address scheduler;
+
+    uint256 constant USERS_LENGTH = 10;
+
+    address[USERS_LENGTH] users;
 
     uint256 tokenId;
     int24 tickLower;
@@ -97,48 +101,11 @@ contract ClvrHookTest is Test, Deployers, Fixtures {
         initUsers();
     }
 
-    function initUsers() internal {
-        users[0] = makeAddr("Alice");
-        users[1] = makeAddr("Bob");
-        users[2] = makeAddr("Carol");
-        users[3] = makeAddr("3");
-        users[4] = makeAddr("4");
-        users[5] = makeAddr("5");
-        users[6] = makeAddr("6");
-        users[7] = makeAddr("7");
-        users[8] = makeAddr("8");
-        users[9] = makeAddr("9");
-    }
-
-    function dealCurrencyToUsers() internal {
-        for (uint256 i = 0; i < users.length; i++) {
-            deal(Currency.unwrap(currency0), users[i], 100e18);
-            deal(Currency.unwrap(currency1), users[i], 100e18);
-        }
-    }
-
-    function approveSwapRouter() internal {
-        for (uint256 i = 0; i < users.length; i++) {
-            vm.startPrank(users[i]);
-            ERC20(Currency.unwrap(currency0)).approve(address(swapRouter), type(uint256).max);
-            ERC20(Currency.unwrap(currency1)).approve(address(swapRouter), type(uint256).max);
-            vm.stopPrank();
-        }
-    }
-
-    function approveHook() internal {
-        for (uint256 i = 0; i < users.length; i++) {
-            vm.startPrank(users[i]);
-            ERC20(Currency.unwrap(currency0)).approve(address(hook), type(uint256).max);
-            ERC20(Currency.unwrap(currency1)).approve(address(hook), type(uint256).max);
-            vm.stopPrank();
-        }
-    }
-
     function testHookSanity() public {
         dealCurrencyToUsers();
         approveSwapRouter();
         approveHook();
+        stakeScheduler();
 
         address sender = users[0];
         bytes memory hookData = abi.encode(sender);
@@ -156,7 +123,9 @@ contract ClvrHookTest is Test, Deployers, Fixtures {
         require(currency0.balanceOf(sender) + uint256(-amount) == c0balance, "Currency0 balance should be decreased by amount");
         require(currency1.balanceOf(sender) == c1balance, "Currency1 balance should not be changed");
 
-        executeBatch();
+        uint256[] memory swapIds = new uint256[](1);
+        swapIds[0] = 0;
+        executeBatch(abi.encode(swapIds));
 
         require(currency1.balanceOf(sender) > c1balance, "Swap should have increased currency1 balance");
     }
@@ -165,6 +134,7 @@ contract ClvrHookTest is Test, Deployers, Fixtures {
         dealCurrencyToUsers();
         approveSwapRouter();
         approveHook();
+        stakeScheduler();
 
         oneBatch();
     }
@@ -173,6 +143,7 @@ contract ClvrHookTest is Test, Deployers, Fixtures {
         dealCurrencyToUsers();
         approveSwapRouter();
         approveHook();
+        stakeScheduler();
 
         uint256 batches = 10;
 
@@ -181,11 +152,54 @@ contract ClvrHookTest is Test, Deployers, Fixtures {
         }
     }
 
-    function oneBatch() internal {
-        uint256[] memory c0balances = new uint256[](users.length);
-        uint256[] memory c1balances = new uint256[](users.length);
+    function stakeScheduler() internal {
+        deal(address(scheduler), 1 ether);
+        vm.startPrank(scheduler, scheduler);
+        hook.stake{value: 1 ether}(key, scheduler);
+        vm.stopPrank();
 
-        for (uint256 i = 0; i < users.length; i++) {
+        require(hook.isStakedScheduler(key, scheduler), "Scheduler should be staked");
+    }
+
+    function initUsers() internal {
+        users[0] = makeAddr("Alice");
+        users[1] = makeAddr("Bob");
+        users[2] = makeAddr("Carol");
+        for (uint256 i = 3; i < USERS_LENGTH; i++) {
+            users[i] = makeAddr(string(abi.encodePacked(i))); // users[i] = makeAddr("i") 
+        }
+    }
+
+    function dealCurrencyToUsers() internal {
+        for (uint256 i = 0; i < USERS_LENGTH; i++) {
+            deal(Currency.unwrap(currency0), users[i], 100e18);
+            deal(Currency.unwrap(currency1), users[i], 100e18);
+        }
+    }
+
+    function approveSwapRouter() internal {
+        for (uint256 i = 0; i < USERS_LENGTH; i++) {
+            vm.startPrank(users[i]);
+            ERC20(Currency.unwrap(currency0)).approve(address(swapRouter), type(uint256).max);
+            ERC20(Currency.unwrap(currency1)).approve(address(swapRouter), type(uint256).max);
+            vm.stopPrank();
+        }
+    }
+
+    function approveHook() internal {
+        for (uint256 i = 0; i < USERS_LENGTH; i++) {
+            vm.startPrank(users[i]);
+            ERC20(Currency.unwrap(currency0)).approve(address(hook), type(uint256).max);
+            ERC20(Currency.unwrap(currency1)).approve(address(hook), type(uint256).max);
+            vm.stopPrank();
+        }
+    }
+
+    function oneBatch() internal {
+        uint256[] memory c0balances = new uint256[](USERS_LENGTH);
+        uint256[] memory c1balances = new uint256[](USERS_LENGTH);
+
+        for (uint256 i = 0; i < USERS_LENGTH; i++) {
             c0balances[i] = currency0.balanceOf(users[i]);
             c1balances[i] = currency1.balanceOf(users[i]);
         }
@@ -194,7 +208,7 @@ contract ClvrHookTest is Test, Deployers, Fixtures {
 
         // check that tokenIn balance has been taken from the user
         // check that tokenOut balance is the same as the initial balance
-        for (uint256 i = 0; i < users.length; i++) {
+        for (uint256 i = 0; i < USERS_LENGTH; i++) {
             bool zeroForOne = i % 2 == 0 ? true : false;
             if (zeroForOne) {
                 require(currency0.balanceOf(users[i]) + 1e18 == c0balances[i], "Currency0 balance should be decreased by 1e18");
@@ -206,12 +220,13 @@ contract ClvrHookTest is Test, Deployers, Fixtures {
         }
 
         uint256 gas = gasleft();
-        executeBatch();
+        executeBatch(abi.encode(getSwapIds()));
+
         if (DEBUG) {
-            console.log("Gas used in donate: ", gas - gasleft());
+            console.log("Gas used in a batch execution: ", gas - gasleft());
         }
 
-        for (uint256 i = 0; i < users.length; i++) {
+        for (uint256 i = 0; i < USERS_LENGTH; i++) {
             bool zeroForOne = i % 2 == 0 ? true : false;
             if (zeroForOne) { // true -> getting token1 in exchange for token0, hence, token1 should increase
                 require(currency1.balanceOf(users[i]) > c1balances[i], "Currency1 balance should be increased");
@@ -222,7 +237,7 @@ contract ClvrHookTest is Test, Deployers, Fixtures {
     }
 
     function sendSwaps() internal {
-        for (uint256 i = 0; i < users.length; i++) {
+        for (uint256 i = 0; i < USERS_LENGTH; i++) {
             vm.startPrank(users[i], users[i]);
 
             uint256 gas = gasleft();
@@ -237,7 +252,17 @@ contract ClvrHookTest is Test, Deployers, Fixtures {
         }
     }
 
-    function executeBatch() internal {
-        donateRouter.donate(key, 0, 0, "");
+    function executeBatch(bytes memory swapIds) internal {
+        vm.startPrank(scheduler, scheduler);
+        donateRouter.donate(key, 0, 0, swapIds);
+        vm.stopPrank();
+    }
+
+    function getSwapIds() internal pure returns (uint256[] memory) {
+        uint256[] memory swapIds = new uint256[](USERS_LENGTH);
+        for (uint256 i = 0; i < USERS_LENGTH; i++) {
+            swapIds[i] = i;
+        }
+        return swapIds;
     }
 }

@@ -30,7 +30,7 @@ contract ClvrStake {
         emit UnstakedScheduler(key.toId(), scheduler);
     }
 
-    function isStakedScheduler(PoolKey calldata key, address scheduler) internal view returns (bool) {
+    function isStakedScheduler(PoolKey calldata key, address scheduler) public view returns (bool) {
         return stakedSchedulers[key.toId()][scheduler];
     }
 }
