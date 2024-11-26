@@ -46,8 +46,8 @@ contract ClvrHook is BaseHook, ClvrStake {
 
     address private constant BATCH = address(0);
 
-    mapping(PoolId => mapping(bytes32 => SwapParamsExtended)) public swapParams; // per pool scheduled swaps (their params)
-    mapping(PoolId => uint256) public swaps; // per pool amount of scheduled swaps
+    mapping(PoolId => mapping(uint256 => SwapParamsExtended)) public swapParams; // per pool scheduled swaps (their params)
+    mapping(PoolId => uint256) public nextSwapKey; // per pool amount of scheduled swaps
 
     ClvrModel private model;
     PoolSwapTest swapRouter;
@@ -121,11 +121,9 @@ contract ClvrHook is BaseHook, ClvrStake {
             params: params
         });
 
-        bytes32 swapId = keccak256(abi.encode(sender, params));
-
         // Store the swap params
-        swapParams[poolId][swapId] = paramsE;
-        swaps[poolId]++;
+        swapParams[poolId][nextSwapKey[poolId]] = paramsE;
+        nextSwapKey[poolId]++;
 
         emit SwapScheduled(poolId, sender);
 
@@ -145,8 +143,8 @@ contract ClvrHook is BaseHook, ClvrStake {
     ) external override onlyStakedScheduler(key, sender) returns (bytes4) {
         PoolId poolId = key.toId();
 
-        bytes32[] memory swapIds = abi.decode(data, (bytes32[]));
-        require(swaps[poolId] == swapIds.length, "All scheduled swaps must be executed");
+        uint256[] memory swapIds = abi.decode(data, (uint256[]));
+        require(nextSwapKey[poolId] == swapIds.length, "All scheduled swaps must be executed");
 
         for (uint256 i = 0; i < swapIds.length; ) {
             SwapParamsExtended memory paramsE = swapParams[poolId][swapIds[i]];
@@ -180,7 +178,7 @@ contract ClvrHook is BaseHook, ClvrStake {
             }
         }
 
-        swaps[poolId] = 0;
+        nextSwapKey[poolId] = 0;
         
         return BaseHook.beforeDonate.selector;
     }
@@ -193,7 +191,13 @@ contract ClvrHook is BaseHook, ClvrStake {
         return sqrtPrice ** 2 / decimals;
     }
 
-    function _unlockCallback(
-        bytes calldata data
-    ) internal override returns (bytes memory) {}
+    // QUERIES
+
+    function getScheduledSwaps(PoolKey calldata key) view external returns (SwapParamsExtended[] memory) {
+        SwapParamsExtended[] memory swaps = new SwapParamsExtended[](nextSwapKey[key.toId()]);
+        for (uint256 i = 0; i < nextSwapKey[key.toId()]; i++) {
+            swaps[i] = swapParams[key.toId()][i];
+        }
+        return swaps;
+    }
 }
