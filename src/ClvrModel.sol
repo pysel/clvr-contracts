@@ -23,7 +23,7 @@ contract ClvrModel {
     uint256 public reserveY;
     uint256 public reserveX;
 
-    modifier sameLength(ClvrHook.SwapParamsExtended[] memory o1, ClvrHook.SwapParamsExtended[] memory o2) {
+    modifier equalLength(ClvrHook.SwapParamsExtended[] memory o1, ClvrHook.SwapParamsExtended[] memory o2) {
         require(o1.length == o2.length, "Orderings must be of the same length");
         _;
     }
@@ -43,7 +43,10 @@ contract ClvrModel {
     /// @param candidateOrdering The ordering to be checked
     /// @return True if the candidate ordering is better, false otherwise
     function isBetterOrdering(uint256 p0, ClvrHook.SwapParamsExtended[] memory challengedOrdering, ClvrHook.SwapParamsExtended[] memory candidateOrdering) 
-    public view sameLength(challengedOrdering, candidateOrdering) returns (bool) 
+        public 
+        view 
+        equalLength(challengedOrdering, candidateOrdering) 
+        returns (bool) 
     {
         challengedOrdering = addMockTrade(challengedOrdering);
         candidateOrdering = addMockTrade(candidateOrdering);
