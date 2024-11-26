@@ -14,11 +14,7 @@ import {SafeCast} from "@uniswap/v4-core/src/libraries/SafeCast.sol";
 import {StateLibrary} from "@uniswap/v4-core/src/libraries/StateLibrary.sol";
 import {TransientStateLibrary} from "@uniswap/v4-core/src/libraries/TransientStateLibrary.sol";
 import {CurrencySettler} from "@uniswap/v4-core/test/utils/CurrencySettler.sol";
-
-
 import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
-
-import { ClvrIntentPool } from "./ClvrIntentPool.sol";
 import {PoolSwapTest} from "@uniswap/v4-core/src/test/PoolSwapTest.sol";
 
 import {ClvrStake} from "./ClvrStake.sol";
@@ -68,6 +64,7 @@ contract ClvrHook is BaseHook, ClvrStake, ClvrSlashing {
     /// @notice The key for the next swap to be scheduled per pool.
     mapping(PoolId => uint256) public nextSwapKey;
 
+    /// @notice Uniswap v4 temporary test swap router, must change before deploying
     PoolSwapTest swapRouter;
 
     constructor(IPoolManager _manager, PoolSwapTest _swapRouter) BaseHook(_manager) {
