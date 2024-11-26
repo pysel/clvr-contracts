@@ -19,41 +19,58 @@ import {CurrencySettler} from "@uniswap/v4-core/test/utils/CurrencySettler.sol";
 import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 
 import { ClvrIntentPool } from "./ClvrIntentPool.sol";
-import { ClvrModel } from "./ClvrModel.sol";
 import {PoolSwapTest} from "@uniswap/v4-core/src/test/PoolSwapTest.sol";
 
 import {ClvrStake} from "./ClvrStake.sol";
+import {ClvrSlashing} from "./ClvrSlashing.sol";
 
 import {console} from "forge-std/console.sol";
 
 
-contract ClvrHook is BaseHook, ClvrStake {
+/// @title ClvrHook
+/// @author Ruslan Akhtariev
+/// @notice This is a Uniswap v4 hook that implements the Clvr protocol.
+/// * It allows to schedule swaps and execute batches of swaps according to the Clvr model.
+/// * Anyone can schedule a swap, but only staked schedulers can schedule a batch.
+/// * Incorrectly scheduled batch can be disputed by anyone and a batch creator slashed accordingly.
+contract ClvrHook is BaseHook, ClvrStake, ClvrSlashing {
     using SafeCast for *;
     using StateLibrary for IPoolManager;
     using BalanceDeltaLibrary for BalanceDelta;
     using TransientStateLibrary for IPoolManager;
     using CurrencySettler for Currency;
 
+    /// @notice Emitted when a batch of swaps is completed
+    /// @param poolId The pool id
     event BatchCompleted(PoolId poolId);
 
+    /// @notice Emitted when a swap is scheduled
+    /// @param poolId The pool id
+    /// @param sender The address that scheduled the swap
     event SwapScheduled(PoolId poolId, address sender);
 
+    /// @notice Extended swap parameters
+    /// @custom:field sender The address that scheduled the swap
+    /// @custom:field recepient The address that will receive the swap
+    /// @custom:field params The swap parameters
     struct SwapParamsExtended {
         address sender;
         address recepient;
         IPoolManager.SwapParams params;
     }
 
+    /// @notice The address a scheduler provides to indicate a hook that this is a time to perform a batch.
     address private constant BATCH = address(0);
 
-    mapping(PoolId => mapping(uint256 => SwapParamsExtended)) public swapParams; // per pool scheduled swaps (their params)
-    mapping(PoolId => uint256) public nextSwapKey; // per pool amount of scheduled swaps
+    /// @notice List of scheduled swaps per pool
+    mapping(PoolId => mapping(uint256 => SwapParamsExtended)) public swapParams;
 
-    ClvrModel private model;
+    /// @notice The key for the next swap to be scheduled per pool.
+    mapping(PoolId => uint256) public nextSwapKey;
+
     PoolSwapTest swapRouter;
 
     constructor(IPoolManager _manager, PoolSwapTest _swapRouter) BaseHook(_manager) {
-        model = new ClvrModel(0, 0);
         swapRouter = _swapRouter;
     }
 
@@ -193,6 +210,9 @@ contract ClvrHook is BaseHook, ClvrStake {
 
     // QUERIES
 
+    /// @notice Returns all scheduled swaps for a given pool
+    /// @param key The pool key
+    /// @return swaps The scheduled swaps
     function getScheduledSwaps(PoolKey calldata key) view external returns (SwapParamsExtended[] memory) {
         SwapParamsExtended[] memory swaps = new SwapParamsExtended[](nextSwapKey[key.toId()]);
         for (uint256 i = 0; i < nextSwapKey[key.toId()]; i++) {
