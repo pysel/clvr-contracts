@@ -40,9 +40,9 @@ contract ClvrHookTest is Test, Deployers, Fixtures {
     PoolId poolId;
     ClvrHook hook;
 
-    address scheduler;
+    address scheduler = makeAddr("Scheduler");
 
-    uint256 constant USERS_LENGTH = 10;
+    uint256 constant USERS_LENGTH = 20;
 
     address[USERS_LENGTH] users;
 
@@ -152,6 +152,62 @@ contract ClvrHookTest is Test, Deployers, Fixtures {
         }
     }
 
+    function testHookNonStakedSchedulerCannotExecuteBatches() public {
+        dealCurrencyToUsers();
+        approveSwapRouter();
+        approveHook();
+
+        uint256[] memory swapIds = getSwapIds();
+        vm.startPrank(scheduler, scheduler);
+
+        vm.expectRevert();
+        executeBatch(abi.encode(swapIds));
+
+        vm.stopPrank();
+    }
+
+    function testStakingUnstaking() public {
+        uint256 initialEthBalance = 2 ether;
+        deal(address(scheduler), initialEthBalance);
+
+        vm.startPrank(scheduler, scheduler);
+        hook.stake{value: initialEthBalance - 1 ether}(key, scheduler);
+        vm.stopPrank();
+
+        require(hook.isStakedScheduler(key, scheduler), "Scheduler should be staked");
+
+        uint256 schedulerBalance = address(scheduler).balance;
+        require(schedulerBalance == initialEthBalance - 1 ether, "Stake should decrease scheduler's balance by 1 ether");
+
+        vm.startPrank(scheduler, scheduler);
+        hook.unstake(key);
+        vm.stopPrank();
+
+        require(!hook.isStakedScheduler(key, scheduler), "Scheduler should not be staked");
+
+        schedulerBalance = address(scheduler).balance;
+        require(schedulerBalance == initialEthBalance, "Unstake should increase scheduler's balance by 1 ether");
+    }
+
+    function testSchedulerCannotUnstakeIfHasRecentBatches() public {
+        dealCurrencyToUsers();
+        approveSwapRouter();
+        approveHook();
+        stakeScheduler();
+
+        sendSwaps();
+        executeBatch(abi.encode(getSwapIds()));
+
+        vm.startPrank(scheduler, scheduler);
+
+        vm.expectRevert();
+        hook.unstake(key);
+
+        vm.stopPrank();
+    }
+
+    // UTILITY FUNCTIONS
+
     function stakeScheduler() internal {
         deal(address(scheduler), 1 ether);
         vm.startPrank(scheduler, scheduler);
@@ -223,7 +279,7 @@ contract ClvrHookTest is Test, Deployers, Fixtures {
         executeBatch(abi.encode(getSwapIds()));
 
         if (DEBUG) {
-            console.log("Gas used in a batch execution: ", gas - gasleft());
+            console.log("Gas used in a batch execution: ", gas - gasleft(), ", approximately $", gasToDollars(gas - gasleft()));
         }
 
         for (uint256 i = 0; i < USERS_LENGTH; i++) {
@@ -245,7 +301,7 @@ contract ClvrHookTest is Test, Deployers, Fixtures {
             swap(key, i % 2 == 0 ? true : false, -1e18, abi.encode(users[i]));
 
             if (DEBUG) {
-                console.log("Gas used in swap [", i, "]: ", gas - gasleft());
+                console.log("Gas used in swap: ", gas - gasleft(), ", approximately $", gasToDollars(gas - gasleft()));
             }
 
             vm.stopPrank();
@@ -264,5 +320,10 @@ contract ClvrHookTest is Test, Deployers, Fixtures {
             swapIds[i] = i;
         }
         return swapIds;
+    }
+
+    // Estimates gas cost in dollars assuming 10 gwei per gas, 3000 USD per ETH
+    function gasToDollars(uint256 gas) internal pure returns (uint256) {
+        return gas * 1e9 * 30000 / 1e18;
     }
 }
