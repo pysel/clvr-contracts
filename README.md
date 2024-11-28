@@ -1,66 +1,15 @@
-## Foundry
+# Smart Contracts for CLVR ordering
 
-**Foundry is a blazing fast, portable and modular toolkit for Ethereum application development written in Rust.**
+This repository contains the smart contracts for the CLVR ordering mechanism. It is built on top of Uniswap V4 as a hook.
 
-Foundry consists of:
+## Contracts
 
--   **Forge**: Ethereum testing framework (like Truffle, Hardhat and DappTools).
--   **Cast**: Swiss army knife for interacting with EVM smart contracts, sending transactions and getting chain data.
--   **Anvil**: Local Ethereum node, akin to Ganache, Hardhat Network.
--   **Chisel**: Fast, utilitarian, and verbose solidity REPL.
+- `ClvrHook.sol`: The entrypoint contract for the CLVR ordering protocol.
+- `ClvrModel.sol`: The model that describes the rule by which swaps are ordered.
+- `ClvrLn.sol`: A small library for calculating the natural logarithm of a number times 1e18.
+- `ClvrSlashing.sol`: A contract that handles the slashing of schedulers that do not follow the protocol correctly.
+- `ClvrStake.sol`: A contract that handles the staking of schedulers.
 
-## Documentation
+## Tests
 
-https://book.getfoundry.sh/
-
-## Usage
-
-### Build
-
-```shell
-$ forge build
-```
-
-### Test
-
-```shell
-$ forge test
-```
-
-### Format
-
-```shell
-$ forge fmt
-```
-
-### Gas Snapshots
-
-```shell
-$ forge snapshot
-```
-
-### Anvil
-
-```shell
-$ anvil
-```
-
-### Deploy
-
-```shell
-$ forge script script/Counter.s.sol:CounterScript --rpc-url <your_rpc_url> --private-key <your_private_key>
-```
-
-### Cast
-
-```shell
-$ cast <subcommand>
-```
-
-### Help
-
-```shell
-$ forge --help
-$ anvil --help
-$ cast --help
-```
+Unit tests can be ran by executing `forge test`.
