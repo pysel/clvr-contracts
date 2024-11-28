@@ -76,58 +76,6 @@ contract ClvrModel {
         return false;
     }
 
-    function clvrReorder(uint256 p0, 
-        ClvrHook.SwapParamsExtended[] memory o, 
-        uint256 reserve_x, 
-        uint256 reserve_y
-    ) public returns (ClvrHook.SwapParamsExtended[] memory) {
-        o = addMockTrade(o);
-
-        set_reserve_x(reserve_x);
-        set_reserve_y(reserve_y);
-
-        int128 lnP0 = p0.lnU256().toInt128();
-        for (uint256 i = 1; i < o.length; ) {
-            uint256 candidateIndex = i;
-            int128 unsquaredCandidateValue = lnP0 - P(o, i).lnU256().toInt128();
-            int256 candidateValue = unsquaredCandidateValue ** 2 / 1e18;
-
-            for (uint256 j = i + 1; j < o.length; ) {
-                swap(o, i, j);
-
-                int256 unsquaredValue = lnP0 - P(o, i).lnU256().toInt128();
-                int256 value = unsquaredValue ** 2 / 1e18;
-
-                if (value < candidateValue) {
-                    candidateIndex = j;
-                    candidateValue = value;
-                }
-
-                swap(o, j, i);
-
-                unchecked {
-                    j++;
-                }
-            }
-
-            if (candidateIndex != i) {
-                swap(o, i, candidateIndex);
-            }
-
-            unchecked {
-                i++;
-            }
-        }
-
-        // TODO: there must be a better way to do this
-        ClvrHook.SwapParamsExtended[] memory result = new ClvrHook.SwapParamsExtended[](o.length - 1);
-        for (uint256 i = 1; i < o.length; i++) {
-            result[i - 1] = o[i];
-        }
-
-        return result;
-    }
-
     // adds a mock trade as a first entry of th array
     function addMockTrade(ClvrHook.SwapParamsExtended[] memory o) internal pure returns(ClvrHook.SwapParamsExtended[] memory) {
         ClvrHook.SwapParamsExtended memory mock = ClvrHook.SwapParamsExtended(address(0), address(0), IPoolManager.SwapParams(false, 0, 0));
