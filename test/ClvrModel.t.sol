@@ -18,7 +18,7 @@ contract ClvrModelTest is Test {
         model = new ClvrModel(100e18, 100e18);
     }
 
-    function testOrdering() public {
+    function testIsBetterOrdering() public {
         ClvrHook.SwapParamsExtended[] memory o = new ClvrHook.SwapParamsExtended[](3);
         o[0] = ClvrHook.SwapParamsExtended(address(1), address(1), IPoolManager.SwapParams(BUY, -10e18, 0));
         o[1] = ClvrHook.SwapParamsExtended(address(1), address(1), IPoolManager.SwapParams(SELL, -5e18, 0));
