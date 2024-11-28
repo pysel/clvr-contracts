@@ -52,19 +52,23 @@ contract ClvrModel {
         public 
         equalLength(challengedOrdering, candidateOrdering) 
         returns (bool) 
-    {   
+    {
         set_reserve_x(reserve_x);
         set_reserve_y(reserve_y);
 
         challengedOrdering = addMockTrade(challengedOrdering);
         candidateOrdering = addMockTrade(candidateOrdering);
 
-        int128 lnP0 = p0.lnU256().toInt128();
+        int256 lnP0 = p0.lnU256().toInt256();
         for (uint256 i = 1; i < challengedOrdering.length; i++) {
-            int128 unsquaredChallengedValue = lnP0 - P(challengedOrdering, i).lnU256().toInt128();
+            int256 unsquaredChallengedValue = lnP0 - P(challengedOrdering, i).lnU256().toInt256();
             int256 challengedValue = unsquaredChallengedValue ** 2 / 1e18;
+            // console.log(P(challengedOrdering, i), P(candidateOrdering, i));
+            console.log(challengedOrdering[i].params.zeroForOne ? "buy" : "sell", challengedOrdering[i].params.amountSpecified);
+            console.log(candidateOrdering[i].params.zeroForOne ? "buy" : "sell", candidateOrdering[i].params.amountSpecified);
+            
 
-            int128 unsquaredCandidateValue = lnP0 - P(candidateOrdering, i).lnU256().toInt128();
+            int256 unsquaredCandidateValue = lnP0 - P(candidateOrdering, i).lnU256().toInt256();
             int256 candidateValue = unsquaredCandidateValue ** 2 / 1e18;
 
             // the candidate ordering is better because the value is lower
@@ -146,6 +150,49 @@ contract ClvrModel {
             return X(o, i - 1) - x_out(o, i);
         }
         revert("Invalid call to X");
+    }
+
+    function y_out_cached(ClvrHook.SwapParamsExtended[] memory o, uint256 i, uint256 cachedY, uint256 cachedX) private pure returns (uint256) {
+        if (direction(o[i]) == Direction.Sell) {
+            uint256 fraction = cachedY / (cachedX + amountIn(o[i]));
+            return fraction * amountIn(o[i]);
+        }
+
+        return 0;
+    }
+
+    function x_out_cached(ClvrHook.SwapParamsExtended[] memory o, uint256 i, uint256 cachedY, uint256 cachedX) private pure returns (uint256) {
+        if (direction(o[i]) == Direction.Buy) {
+            uint256 fraction = cachedX / (cachedY + amountIn(o[i]));
+            return fraction * amountIn(o[i]);
+        }
+        return 0;
+    }
+
+    function Y_cached(ClvrHook.SwapParamsExtended[] memory o, uint256 i, uint256 cachedY, uint256 cachedX) private view returns (uint256) {
+        if (i == 0) {
+            return reserveY;
+        } else if (i > 0 && direction(o[i]) == Direction.Buy) {
+            return cachedY + amountIn(o[i]);
+        } else if (i > 0 && direction(o[i]) == Direction.Sell) {
+            return cachedY - y_out_cached(o, i, cachedY, cachedX);
+        }
+        revert("Invalid call to Y_cached");
+    }
+
+    function X_cached(ClvrHook.SwapParamsExtended[] memory o, uint256 i, uint256 cachedY, uint256 cachedX) private view returns (uint256) {
+        if (i == 0) {
+            return reserveX;
+        } else if (i > 0 && direction(o[i]) == Direction.Sell) {
+            return cachedX + amountIn(o[i]);
+        } else if (i > 0 && direction(o[i]) == Direction.Buy) {
+            return cachedX - x_out_cached(o, i, cachedY, cachedX);
+        }
+        revert("Invalid call to X_cached");
+    }
+
+    function P_cached(ClvrHook.SwapParamsExtended[] memory o, uint256 i, uint256 cachedY, uint256 cachedX) private view returns (uint256) {
+        return Y_cached(o, i, cachedY, cachedX) * 1e18 / X_cached(o, i, cachedY, cachedX);
     }
 
     function direction(ClvrHook.SwapParamsExtended memory o) private pure returns (Direction) {

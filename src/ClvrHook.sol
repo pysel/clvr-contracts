@@ -250,6 +250,9 @@ contract ClvrHook is BaseHook, ClvrStake, ClvrSlashing {
     /// @param batchIndex The index of the batch to dispute
     /// @param betterReordering The reordering of swaps that is better than the retained batch
     function disputeBatch(PoolKey calldata key, uint256 batchIndex, uint256[] memory betterReordering) public {
+        require(batchIndex < ClvrSlashing.BATCH_RETENTION_PERIOD, "Batch index out of bounds");
+        require(!retainedBatches[key.toId()][batchIndex].disputed, "Batch already disputed");
+        
         bytes4 magic = _disputeBatch(key, batchIndex, betterReordering);
         if (magic == ClvrSlashing.BATCH_DISPUTED_MAGIC_VALUE) {
             payable(msg.sender).transfer(ClvrStake.STAKE_AMOUNT);

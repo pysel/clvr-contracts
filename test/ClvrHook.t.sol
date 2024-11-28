@@ -206,6 +206,36 @@ contract ClvrHookTest is Test, Deployers, Fixtures {
         vm.stopPrank();
     }
 
+    function testDisputeBatch() public {
+        dealCurrencyToUsers();
+        approveSwapRouter();
+        approveHook();
+        stakeScheduler();
+
+        sendSwaps();
+
+        uint256[] memory badOrdering = new uint256[](USERS_LENGTH);
+
+        // execute even-indexed swaps first (sell direction), then odd-indexed swaps (buy direction)
+        for (uint256 i = 0; i < USERS_LENGTH/2; i++) {
+            badOrdering[i] = 2 * i;
+        }
+
+        for (uint256 i = USERS_LENGTH/2; i < USERS_LENGTH; i++) {
+            badOrdering[i] = 2 * (i - USERS_LENGTH/2) + 1;
+        }
+
+        executeBatch(abi.encode(badOrdering));
+
+        uint256[] memory betterOrdering = getSwapIds();
+
+        address disputer = makeAddr("Disputer");
+
+        vm.startPrank(disputer, disputer);
+        hook.disputeBatch(key, hook.BATCH_RETENTION_PERIOD() - 1, betterOrdering);
+        vm.stopPrank();
+    }
+
     // UTILITY FUNCTIONS
 
     function stakeScheduler() internal {
