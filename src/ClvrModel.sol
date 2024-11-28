@@ -42,12 +42,20 @@ contract ClvrModel {
     /// @param challengedOrdering The ordering to be challenged
     /// @param candidateOrdering The ordering to be checked
     /// @return True if the candidate ordering is better, false otherwise
-    function isBetterOrdering(uint256 p0, ClvrHook.SwapParamsExtended[] memory challengedOrdering, ClvrHook.SwapParamsExtended[] memory candidateOrdering) 
+    function isBetterOrdering(
+        uint256 p0, 
+        uint256 reserve_x,
+        uint256 reserve_y,
+        ClvrHook.SwapParamsExtended[] memory challengedOrdering, 
+        ClvrHook.SwapParamsExtended[] memory candidateOrdering
+    ) 
         public 
-        view 
         equalLength(challengedOrdering, candidateOrdering) 
         returns (bool) 
-    {
+    {   
+        set_reserve_x(reserve_x);
+        set_reserve_y(reserve_y);
+
         challengedOrdering = addMockTrade(challengedOrdering);
         candidateOrdering = addMockTrade(candidateOrdering);
 

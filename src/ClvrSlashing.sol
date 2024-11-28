@@ -26,11 +26,15 @@ contract ClvrSlashing {
     /// @notice A struct to store a batch of swaps
     /// @param creator The address of the creator of the batch
     /// @param p0 The initial price
+    /// @param reserveX The reserve of the base currency
+    /// @param reserveY The reserve of the quote currency
     /// @param swaps The swaps in the batch
     /// @param disputed Whether the batch has been disputed
     struct RetainedBatch {
         address creator;
         uint256 p0;
+        uint256 reserveX;
+        uint256 reserveY;
         ClvrHook.SwapParamsExtended[] swaps;
         bool disputed;
     }
@@ -48,14 +52,17 @@ contract ClvrSlashing {
     /// Adds a new batch to the queue, pushing the oldest batch out
     /// @param key The pool key
     /// @param newBatch The new batch of swaps
-    function addBatch(PoolKey calldata key, ClvrHook.SwapParamsExtended[] memory newBatch, address creator, uint256 p0) public {
-        RetainedBatch[BATCH_RETENTION_PERIOD] storage batch = retainedBatches[key.toId()];
-        for (uint256 i = 0; i < batch.length - 1; i++) {
-            batch[i].swaps = batch[i+1].swaps;
+    function addBatch(PoolKey calldata key, RetainedBatch memory newBatch) public {
+        RetainedBatch[BATCH_RETENTION_PERIOD] storage batches = retainedBatches[key.toId()];
+        uint256 batchLength = batches.length;
+
+        // shift all batches forward
+        for (uint256 i = 0; i < batchLength - 1; i++) {
+            batches[i].swaps = batches[i+1].swaps;
         }
-        batch[batch.length - 1].swaps = newBatch;
-        batch[batch.length - 1].creator = creator;
-        batch[batch.length - 1].p0 = p0;
+
+        // add the new batch to the end of the queue
+        batches[batchLength - 1] = newBatch;
     }
     
     /// Disputes a batch, which means that the caller is claiming that there is an ordering that provides lower volatility.
@@ -77,7 +84,7 @@ contract ClvrSlashing {
             suggestedOrdering[i] = batch.swaps[betterReordering[i]];
         }
 
-        if (model.isBetterOrdering(batch.p0, batch.swaps, suggestedOrdering)) {
+        if (model.isBetterOrdering(batch.p0, batch.reserveX, batch.reserveY, batch.swaps, suggestedOrdering)) {
             batch.disputed = true;
 
             emit BatchDisputed(key.toId(), batchIndex, batch.creator, msg.sender);

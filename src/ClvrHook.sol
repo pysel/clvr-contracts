@@ -160,8 +160,13 @@ contract ClvrHook is BaseHook, ClvrStake, ClvrSlashing {
         uint256[] memory swapIds = abi.decode(data, (uint256[]));
         require(nextSwapKey[poolId] == swapIds.length, "Swap Ids length does not match the size of the scheduled swaps");
 
+        SwapParamsExtended[] memory batchedSwaps = new SwapParamsExtended[](swapIds.length);
+        for (uint256 i = 0; i < swapIds.length; i++) {
+            batchedSwaps[i] = swapParams[poolId][swapIds[i]];
+        }
+
         for (uint256 i = 0; i < swapIds.length; ) {
-            SwapParamsExtended memory paramsE = swapParams[poolId][swapIds[i]];
+            SwapParamsExtended memory paramsE = batchedSwaps[i];
 
             // Execute the swap
             poolManager.swap(key, paramsE.params, abi.encode(BATCH));
@@ -193,6 +198,23 @@ contract ClvrHook is BaseHook, ClvrStake, ClvrSlashing {
         }
 
         nextSwapKey[poolId] = 0;
+
+        (uint256 reserve_x, uint256 reserve_y) = getCurrentReserves(key);
+
+        // retain the batch
+        RetainedBatch memory batch = RetainedBatch({
+            creator: tx.origin,
+            p0: getCurrentPrice(key),
+            reserveX: reserve_x,
+            reserveY: reserve_y,
+            swaps: batchedSwaps,
+            disputed: false
+        });
+
+        // add the batch to the retained set
+        addBatch(key, batch);
+
+        emit BatchCompleted(poolId);
         
         return BaseHook.beforeDonate.selector;
     }
@@ -223,6 +245,10 @@ contract ClvrHook is BaseHook, ClvrStake, ClvrSlashing {
         payable(msg.sender).transfer(STAKE_AMOUNT);
     }
 
+    /// @notice Disputes a batch of swaps
+    /// @param key The pool key
+    /// @param batchIndex The index of the batch to dispute
+    /// @param betterReordering The reordering of swaps that is better than the retained batch
     function disputeBatch(PoolKey calldata key, uint256 batchIndex, uint256[] memory betterReordering) public {
         bytes4 magic = _disputeBatch(key, batchIndex, betterReordering);
         if (magic == ClvrSlashing.BATCH_DISPUTED_MAGIC_VALUE) {
@@ -233,7 +259,23 @@ contract ClvrHook is BaseHook, ClvrStake, ClvrSlashing {
         _unstake(key, slashedCreator); // unstakes without paying back the stake to the batch creator
     }
 
-    function getCurrentPrice(PoolKey calldata key) view internal returns (uint256) {
+    // QUERIES
+
+    /// @notice Returns all scheduled swaps for a given pool
+    /// @param key The pool key
+    /// @return swaps The scheduled swaps
+    function getScheduledSwaps(PoolKey calldata key) view public returns (SwapParamsExtended[] memory) {
+        SwapParamsExtended[] memory swaps = new SwapParamsExtended[](nextSwapKey[key.toId()]);
+        for (uint256 i = 0; i < nextSwapKey[key.toId()]; i++) {
+            swaps[i] = swapParams[key.toId()][i];
+        }
+        return swaps;
+    }
+
+    /// @notice Returns the current price of the pool
+    /// @param key The pool key
+    /// @return price The current price
+    function getCurrentPrice(PoolKey calldata key) view public returns (uint256) {
         (uint160 sqrtPriceX96, , , ) = poolManager.getSlot0(key.toId());
         uint256 decimals = 10 **
             ERC20(Currency.unwrap(key.currency1)).decimals();
@@ -241,16 +283,16 @@ contract ClvrHook is BaseHook, ClvrStake, ClvrSlashing {
         return sqrtPrice ** 2 / decimals;
     }
 
-    // QUERIES
-
-    /// @notice Returns all scheduled swaps for a given pool
+    /// @notice Returns the current reserves of the pool (the ones on which clvr computations should happen)
+    /// Not real reserves, but are implied from the current price, only needed for clvr computations
     /// @param key The pool key
-    /// @return swaps The scheduled swaps
-    function getScheduledSwaps(PoolKey calldata key) view external returns (SwapParamsExtended[] memory) {
-        SwapParamsExtended[] memory swaps = new SwapParamsExtended[](nextSwapKey[key.toId()]);
-        for (uint256 i = 0; i < nextSwapKey[key.toId()]; i++) {
-            swaps[i] = swapParams[key.toId()][i];
-        }
-        return swaps;
+    /// @return reserve0 The current reserve of the first currency
+    /// @return reserve1 The current reserve of the second currency
+    function getCurrentReserves(PoolKey calldata key) view public returns (uint256, uint256) {
+        uint256 currentPrice = getCurrentPrice(key);
+        uint256 reserve0 = currentPrice * 1e18;
+        uint256 reserve1 = 1e18;
+
+        return (reserve0, reserve1);
     }
 }
