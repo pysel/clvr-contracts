@@ -5,6 +5,7 @@ import {PoolKey} from "@uniswap/v4-core/src/types/PoolKey.sol";
 import {PoolId} from "@uniswap/v4-core/src/types/PoolId.sol";
 import {ClvrHook} from "./ClvrHook.sol";
 import {ClvrModel} from "./ClvrModel.sol";
+import { console } from "forge-std/console.sol";
 
 /// @title ClvrSlashing
 /// @author Ruslan Akhtariev
@@ -17,11 +18,18 @@ contract ClvrSlashing {
     /// @param disputer The address of the disputer
     event BatchDisputed(PoolId indexed poolId, uint256 batchIndex, address creator, address disputer);
 
+    /// @notice Emitted when a batch is not successfully disputed
+    /// @param poolId The pool ID
+    /// @param batchIndex The index of the batch
+    /// @param creator The address of the creator of the batch
+    /// @param disputer The address of the disputer
+    event BatchNotDisputed(PoolId indexed poolId, uint256 batchIndex, address creator, address disputer);
+
     /// @notice How many batches are simultaneously kept in memory as a graceful period for slashing
     uint256 public constant BATCH_RETENTION_PERIOD = 5;
 
     /// @notice Magic value to return when a batch is disputed successfully
-    bytes4 public constant BATCH_DISPUTED_MAGIC_VALUE = bytes4(keccak256("BATCH_DISPUTED"));
+    bytes4 public constant BATCH_DISPUTED_MAGIC_VALUE = bytes4(keccak256("BATCH_DISPUTED_MAGIC_VALUE"));
 
     /// @notice A struct to store a batch of swaps
     /// @param creator The address of the creator of the batch
@@ -74,7 +82,7 @@ contract ClvrSlashing {
         require(batchIndex < BATCH_RETENTION_PERIOD, "Batch index out of bounds");
         require(!retainedBatches[key.toId()][batchIndex].disputed, "Batch already disputed");
 
-        RetainedBatch storage batch = retainedBatches[key.toId()][batchIndex];
+        RetainedBatch memory batch = retainedBatches[key.toId()][batchIndex];
         uint256 batchSize = batch.swaps.length;
 
         require(betterReordering.length == batchSize, "Invalid reordering length");
@@ -85,12 +93,14 @@ contract ClvrSlashing {
         }
 
         if (model.isBetterOrdering(batch.p0, batch.reserveX, batch.reserveY, batch.swaps, suggestedOrdering)) {
-            batch.disputed = true;
+            retainedBatches[key.toId()][batchIndex].disputed = true;
 
             emit BatchDisputed(key.toId(), batchIndex, batch.creator, msg.sender);
 
             return BATCH_DISPUTED_MAGIC_VALUE;
         }
+
+        emit BatchNotDisputed(key.toId(), batchIndex, batch.creator, msg.sender);
 
         return bytes4(0);
     }

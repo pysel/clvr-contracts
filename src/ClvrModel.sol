@@ -35,17 +35,19 @@ contract ClvrModel {
     }
 
     // PUBLIC FUNCTIONS
-
+    
     /// @notice Checks if the candidate ordering is better than the challenged ordering
     /// @notice Candidate ordering is better if the CLVR value is lower at any step
     /// @param p0 The initial price
+    /// @param reserve_x The initial reserve x
+    /// @param reserve_y The initial reserve y
     /// @param challengedOrdering The ordering to be challenged
     /// @param candidateOrdering The ordering to be checked
     /// @return True if the candidate ordering is better, false otherwise
     function isBetterOrdering(
         uint256 p0, 
-        uint256 reserve_x,
         uint256 reserve_y,
+        uint256 reserve_x,
         ClvrHook.SwapParamsExtended[] memory challengedOrdering, 
         ClvrHook.SwapParamsExtended[] memory candidateOrdering
     ) 
@@ -53,26 +55,45 @@ contract ClvrModel {
         equalLength(challengedOrdering, candidateOrdering) 
         returns (bool) 
     {
-        set_reserve_x(reserve_x);
         set_reserve_y(reserve_y);
+        set_reserve_x(reserve_x);
 
         challengedOrdering = addMockTrade(challengedOrdering);
         candidateOrdering = addMockTrade(candidateOrdering);
 
-        int256 lnP0 = p0.lnU256().toInt256();
+        int256 ln_p0 = p0.lnU256().toInt256();
+
+        uint256[] memory challengedVolatility = new uint256[](challengedOrdering.length);
+        uint256[] memory candidateVolatility = new uint256[](candidateOrdering.length);
+
+        uint256 cachedY = reserveY;
+        uint256 cachedX = reserveX;
+
         for (uint256 i = 1; i < challengedOrdering.length; i++) {
-            int256 unsquaredChallengedValue = lnP0 - P(challengedOrdering, i).lnU256().toInt256();
-            int256 challengedValue = unsquaredChallengedValue ** 2 / 1e18;
-            // console.log(P(challengedOrdering, i), P(candidateOrdering, i));
-            console.log(challengedOrdering[i].params.zeroForOne ? "buy" : "sell", challengedOrdering[i].params.amountSpecified);
-            console.log(candidateOrdering[i].params.zeroForOne ? "buy" : "sell", candidateOrdering[i].params.amountSpecified);
-            
+            (uint256 p, uint256 cached_y, uint256 cached_x) = P_cached(challengedOrdering, i, cachedY, cachedX);
+            int256 ln_p = p.lnU256().toInt256();
+            int256 diff = ln_p0 - ln_p;
+            challengedVolatility[i] = uint256(diff ** 2 / 1e18);
 
-            int256 unsquaredCandidateValue = lnP0 - P(candidateOrdering, i).lnU256().toInt256();
-            int256 candidateValue = unsquaredCandidateValue ** 2 / 1e18;
+            cachedY = cached_y;
+            cachedX = cached_x;
+        }
 
-            // the candidate ordering is better because the value is lower
-            if (candidateValue < challengedValue) {
+        cachedY = reserveY;
+        cachedX = reserveX;
+
+        for (uint256 i = 1; i < candidateOrdering.length; i++) {
+            (uint256 p, uint256 cached_y, uint256 cached_x) = P_cached(candidateOrdering, i, cachedY, cachedX);
+            int256 ln_p = p.lnU256().toInt256();
+            int256 diff = ln_p0 - ln_p;
+            candidateVolatility[i] = uint256(diff ** 2 / 1e18);
+
+            cachedY = cached_y;
+            cachedX = cached_x;
+        }
+        
+        for (uint256 i = 0; i < challengedOrdering.length; i++) {
+            if (candidateVolatility[i] < challengedVolatility[i]) {
                 return true;
             }
         }
@@ -191,8 +212,11 @@ contract ClvrModel {
         revert("Invalid call to X_cached");
     }
 
-    function P_cached(ClvrHook.SwapParamsExtended[] memory o, uint256 i, uint256 cachedY, uint256 cachedX) private view returns (uint256) {
-        return Y_cached(o, i, cachedY, cachedX) * 1e18 / X_cached(o, i, cachedY, cachedX);
+    /// @notice Returns the price, the new y and the new x after the swap
+    function P_cached(ClvrHook.SwapParamsExtended[] memory o, uint256 i, uint256 cachedY, uint256 cachedX) private view returns (uint256, uint256, uint256) {
+        uint256 y_cached_new = Y_cached(o, i, cachedY, cachedX);
+        uint256 x_cached_new = X_cached(o, i, cachedY, cachedX);
+        return (y_cached_new * 1e18 / x_cached_new, y_cached_new, x_cached_new);
     }
 
     function direction(ClvrHook.SwapParamsExtended memory o) private pure returns (Direction) {

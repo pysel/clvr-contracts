@@ -291,9 +291,9 @@ contract ClvrHook is BaseHook, ClvrStake, ClvrSlashing {
     /// @param key The pool key
     /// @return reserve0 The current reserve of the first currency
     /// @return reserve1 The current reserve of the second currency
-    function getCurrentReserves(PoolKey calldata key) view public returns (uint256, uint256) {
+    function getCurrentReserves(PoolKey calldata key) view public returns (uint256, uint256) { // TODO: think about this when decimals of two tokens are different
         uint256 currentPrice = getCurrentPrice(key);
-        uint256 reserve0 = currentPrice * 1e18;
+        uint256 reserve0 = currentPrice;
         uint256 reserve1 = 1e18;
 
         return (reserve0, reserve1);

@@ -216,7 +216,7 @@ contract ClvrHookTest is Test, Deployers, Fixtures {
 
         uint256[] memory badOrdering = new uint256[](USERS_LENGTH);
 
-        // execute even-indexed swaps first (sell direction), then odd-indexed swaps (buy direction)
+        // bad ordering is all buys, then all sells
         for (uint256 i = 0; i < USERS_LENGTH/2; i++) {
             badOrdering[i] = 2 * i;
         }
@@ -227,12 +227,36 @@ contract ClvrHookTest is Test, Deployers, Fixtures {
 
         executeBatch(abi.encode(badOrdering));
 
-        uint256[] memory betterOrdering = getSwapIds();
+        // better ordering is alternating ordering
+        uint256[] memory betterOrdering = new uint256[](USERS_LENGTH);
+        for (uint256 i = 0; i < USERS_LENGTH/2; i++) {
+            betterOrdering[2*i] = i;
+            betterOrdering[2*i + 1] = USERS_LENGTH/2 + i;
+        }
 
         address disputer = makeAddr("Disputer");
+        uint256 hookBalanceBeforeDispute = address(hook).balance;
+        uint256 batchIndex = hook.BATCH_RETENTION_PERIOD() - 1;
+
+        uint256 gas = gasleft();
 
         vm.startPrank(disputer, disputer);
-        hook.disputeBatch(key, hook.BATCH_RETENTION_PERIOD() - 1, betterOrdering);
+        hook.disputeBatch(key, batchIndex, betterOrdering);
+        vm.stopPrank();
+
+        if (DEBUG) {
+            console.log("Gas used in dispute: ", gas - gasleft(), ", approximately $", gasToDollars(gas - gasleft()));
+        }
+
+        require(address(hook).balance < hookBalanceBeforeDispute, "Hook should pay stake to disputer");
+        require(!hook.isStakedScheduler(key, scheduler), "Scheduler should not be staked after valid dispute");
+        require(address(disputer).balance == 1 ether, "Disputer should receive 1 ether");
+
+        vm.startPrank(disputer, disputer);
+
+        vm.expectRevert(); // should revert because batch is already disputed
+        hook.disputeBatch(key, batchIndex, betterOrdering);
+
         vm.stopPrank();
     }
 
