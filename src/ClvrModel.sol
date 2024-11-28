@@ -119,12 +119,6 @@ contract ClvrModel {
         o[i2] = temp;
     }
 
-    // CONTRACT: note in TradeMinimal implemented!
-    function P(ClvrHook.SwapParamsExtended[] memory o, uint256 i) public view returns (uint256) {
-        uint256 base = 1e18;
-        return Y(o, i) * base / X(o, i);
-    }
-
     function set_reserve_x(uint256 reserve_x) internal {
         reserveX = reserve_x;
     }
@@ -134,44 +128,6 @@ contract ClvrModel {
     }
 
     // INTERNAL FUNCTIONS
-
-    function y_out(ClvrHook.SwapParamsExtended[] memory o, uint256 i) private view returns (uint256) {
-        if (direction(o[i]) == Direction.Sell) {
-            uint256 fraction = Y(o, i - 1) / (X(o, i - 1) + amountIn(o[i]));
-            return fraction * amountIn(o[i]);
-        }
-        return 0;
-    }
-
-    function x_out(ClvrHook.SwapParamsExtended[] memory o, uint256 i) private view returns (uint256) {
-        if (direction(o[i]) == Direction.Buy) {
-            uint256 fraction = X(o, i - 1) / (Y(o, i - 1) + amountIn(o[i]));
-            return fraction * amountIn(o[i]);
-        }
-        return 0;
-    }
-
-    function Y(ClvrHook.SwapParamsExtended[] memory o, uint256 i) private view returns (uint256) {
-        if (i == 0) {
-            return reserveY;
-        } else if (i > 0 && direction(o[i]) == Direction.Buy) {
-            return Y(o, i - 1) + amountIn(o[i]);
-        } else if (i > 0 && direction(o[i]) == Direction.Sell) {
-            return Y(o, i - 1) - y_out(o, i);
-        }
-        revert("Invalid call to Y");
-    }
-
-    function X(ClvrHook.SwapParamsExtended[] memory o, uint256 i) private view returns (uint256) {
-        if (i == 0) {
-            return reserveX;
-        } else if (i > 0 && direction(o[i]) == Direction.Sell) {
-            return X(o, i - 1) + amountIn(o[i]);
-        } else if (i > 0 && direction(o[i]) == Direction.Buy) {
-            return X(o, i - 1) - x_out(o, i);
-        }
-        revert("Invalid call to X");
-    }
 
     function y_out_cached(ClvrHook.SwapParamsExtended[] memory o, uint256 i, uint256 cachedY, uint256 cachedX) private pure returns (uint256) {
         if (direction(o[i]) == Direction.Sell) {
