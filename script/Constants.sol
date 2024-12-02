@@ -9,7 +9,7 @@ contract Constants {
     address public constant CURRENCY0 = 0x0000000000000000000000000000000000000000; // native eth
     uint24 public constant POOL_FEE = 3000;
     int24 public constant TICK_SPACING = 60;
-    address public constant HOOK_CONTRACT = 0xA539b90b0bee1EBd567B43B6007d1790028d00A8;
+    address public constant HOOK_CONTRACT = 0x3c5D21865e0f344f1dd69cC9Fc4dF775Da3440A8;
 
     uint160 public constant STARTING_PRICE_SQRT_X96 = 1.02010509675 * 10e31; // sqrt(3300/23) * 2 ** 96
 }

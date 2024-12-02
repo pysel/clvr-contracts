@@ -33,5 +33,7 @@ contract DeployClvrHookOnSepolia is Script, Constants {
 
         ClvrHook hook = new ClvrHook{salt: salt}(PoolManager(POOL_MANAGER_SEPOLIA), PoolSwapTest(SWAP_ROUTER_SEPOLIA));
         require(address(hook) == hookAddress, "DeployClvrHookOnSepolia: hook address mismatch");
+
+        console.log("Hook address:", hookAddress);
     }
 }

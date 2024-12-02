@@ -23,6 +23,9 @@ contract DeployHookedPool is Script, Constants {
             tickSpacing: TICK_SPACING,
             hooks: IHooks(HOOK_CONTRACT)
         });
+
+        bytes memory poolKeyBytes = abi.encode(pool);
+        console.logBytes(poolKeyBytes);
     }
     function run() external {
         vm.broadcast();
