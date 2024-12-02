@@ -64,8 +64,20 @@ contract ClvrHook is BaseHook, ClvrStake, ClvrSlashing {
     /// @notice The key for the next swap to be scheduled per pool.
     mapping(PoolId => uint256) public nextSwapKey;
 
+    /// @notice The minimum number of blocks that must pass before a batch can be executed
+    uint256 public constant BATCH_PERIOD = 5; 
+
+    /// @notice Block number of the last batch
+    uint256 public lastBatchBlock;
+
     /// @notice Uniswap v4 temporary test swap router, must change before deploying
     PoolSwapTest swapRouter;
+
+    /// @notice Modifier to check if the batch period has passed since the last batch
+    modifier batchIsReady() {
+        require(block.number >= lastBatchBlock + BATCH_PERIOD, "Batch is not ready");
+        _;
+    }
 
     constructor(IPoolManager _manager, PoolSwapTest _swapRouter) BaseHook(_manager) {
         swapRouter = _swapRouter;
@@ -154,7 +166,7 @@ contract ClvrHook is BaseHook, ClvrStake, ClvrSlashing {
         uint256,
         uint256,
         bytes calldata data // array of swapIds encoded as bytes32[]
-    ) external override onlyStakedScheduler(key, tx.origin) returns (bytes4) { // origin because the hook is called by a proxy contract
+    ) external override onlyStakedScheduler(key, tx.origin) batchIsReady returns (bytes4) { // origin because the hook is called by a proxy contract
         PoolId poolId = key.toId();
 
         uint256[] memory swapIds = abi.decode(data, (uint256[]));
@@ -215,6 +227,8 @@ contract ClvrHook is BaseHook, ClvrStake, ClvrSlashing {
         addBatch(key, batch);
 
         emit BatchCompleted(poolId);
+
+        lastBatchBlock = block.number;
         
         return BaseHook.beforeDonate.selector;
     }
