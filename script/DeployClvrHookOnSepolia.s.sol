@@ -10,11 +10,8 @@ import {PoolManager} from "@uniswap/v4-core/src/PoolManager.sol";
 import {PoolSwapTest} from "@uniswap/v4-core/src/test/PoolSwapTest.sol";
 import {Hooks} from "@uniswap/v4-core/src/libraries/Hooks.sol";
 import {HookMiner} from "./HookMiner.sol";
-
-contract DeployClvrHookOnSepolia is Script {
-    address public constant POOL_MANAGER_SEPOLIA = 0x8C4BcBE6b9eF47855f97E675296FA3F6fafa5F1A;
-    address public constant SWAP_ROUTER_SEPOLIA = 0xe49d2815C231826caB58017e214Bed19fE1c2dD4;
-
+import {Constants} from "./Constants.sol";
+contract DeployClvrHookOnSepolia is Script, Constants {
     address public hookAddress;
     bytes32 public salt;
 
