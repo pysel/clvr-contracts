@@ -40,7 +40,9 @@ contract ClvrHookTest is Test, Deployers, Fixtures {
     PoolId poolId;
     ClvrHook hook;
 
-    address[10] users;
+    uint256 constant USERS_COUNT = 10;
+
+    address[USERS_COUNT] users;
 
     uint256 tokenId;
     int24 tickLower;
@@ -101,13 +103,9 @@ contract ClvrHookTest is Test, Deployers, Fixtures {
         users[0] = makeAddr("Alice");
         users[1] = makeAddr("Bob");
         users[2] = makeAddr("Carol");
-        users[3] = makeAddr("3");
-        users[4] = makeAddr("4");
-        users[5] = makeAddr("5");
-        users[6] = makeAddr("6");
-        users[7] = makeAddr("7");
-        users[8] = makeAddr("8");
-        users[9] = makeAddr("9");
+        for (uint256 i = 3; i < users.length; i++) {
+            users[i] = makeAddr(string(abi.encodePacked(i)));
+        }
     }
 
     function dealCurrencyToUsers() internal {

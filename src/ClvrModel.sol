@@ -41,23 +41,33 @@ contract ClvrModel {
         set_reserve_y(reserve_y);
 
         int128 lnP0 = p0.lnU256().toInt128();
+        uint256 cachedY = reserveY;
+        uint256 cachedX = reserveX;
+
         for (uint256 i = 1; i < o.length; ) {
             uint256 candidateIndex = i;
-            int128 unsquaredCandidateValue = lnP0 - P(o, i).lnU256().toInt128();
+            (uint256 p, uint256 y_cached, uint256 x_cached) = P_cached(o, i, cachedY, cachedX);
+
+            int256 unsquaredCandidateValue = lnP0 - p.lnU256().toInt128();
             int256 candidateValue = unsquaredCandidateValue ** 2 / 1e18;
 
             for (uint256 j = i + 1; j < o.length; ) {
-                swap(o, i, j);
+                swap(o, i, j); // try the next element at position i
+                
+                (uint256 p_new, uint256 y_cached_new, uint256 x_cached_new) = P_cached(o, i, cachedY, cachedX);
 
-                int256 unsquaredValue = lnP0 - P(o, i).lnU256().toInt128();
-                int256 value = unsquaredValue ** 2 / 1e18;
+                int256 unsquaredNewValue = lnP0 - p_new.lnU256().toInt128();
+                int256 newCandidateValue = unsquaredNewValue ** 2 / 1e18;
 
-                if (value < candidateValue) {
+                if (newCandidateValue < candidateValue) {
                     candidateIndex = j;
-                    candidateValue = value;
+                    candidateValue = newCandidateValue;
+
+                    y_cached = y_cached_new;
+                    x_cached = x_cached_new;
                 }
 
-                swap(o, j, i);
+                swap(o, j, i); // swap back
 
                 unchecked {
                     j++;
@@ -67,6 +77,9 @@ contract ClvrModel {
             if (candidateIndex != i) {
                 swap(o, i, candidateIndex);
             }
+
+            cachedY = y_cached;
+            cachedX = x_cached;
 
             unchecked {
                 i++;
@@ -100,12 +113,6 @@ contract ClvrModel {
         o[i2] = temp;
     }
 
-    // CONTRACT: note in TradeMinimal implemented!
-    function P(ClvrHook.SwapParamsExtended[] memory o, uint256 i) public view returns (uint256) {
-        uint256 base = 1e18;
-        return Y(o, i) * base / X(o, i);
-    }
-
     function set_reserve_x(uint256 reserve_x) internal {
         reserveX = reserve_x;
     }
@@ -116,42 +123,50 @@ contract ClvrModel {
 
     // INTERNAL FUNCTIONS
 
-    function y_out(ClvrHook.SwapParamsExtended[] memory o, uint256 i) private view returns (uint256) {
+    function y_out_cached(ClvrHook.SwapParamsExtended[] memory o, uint256 i, uint256 cachedY, uint256 cachedX) private pure returns (uint256) {
         if (direction(o[i]) == Direction.Sell) {
-            uint256 fraction = Y(o, i - 1) / (X(o, i - 1) + amountIn(o[i]));
+            uint256 fraction = cachedY / (cachedX + amountIn(o[i]));
             return fraction * amountIn(o[i]);
         }
+
         return 0;
     }
 
-    function x_out(ClvrHook.SwapParamsExtended[] memory o, uint256 i) private view returns (uint256) {
+    function x_out_cached(ClvrHook.SwapParamsExtended[] memory o, uint256 i, uint256 cachedY, uint256 cachedX) private pure returns (uint256) {
         if (direction(o[i]) == Direction.Buy) {
-            uint256 fraction = X(o, i - 1) / (Y(o, i - 1) + amountIn(o[i]));
+            uint256 fraction = cachedX / (cachedY + amountIn(o[i]));
             return fraction * amountIn(o[i]);
         }
         return 0;
     }
 
-    function Y(ClvrHook.SwapParamsExtended[] memory o, uint256 i) private view returns (uint256) {
+    function Y_cached(ClvrHook.SwapParamsExtended[] memory o, uint256 i, uint256 cachedY, uint256 cachedX) private view returns (uint256) {
         if (i == 0) {
             return reserveY;
         } else if (i > 0 && direction(o[i]) == Direction.Buy) {
-            return Y(o, i - 1) + amountIn(o[i]);
+            return cachedY + amountIn(o[i]);
         } else if (i > 0 && direction(o[i]) == Direction.Sell) {
-            return Y(o, i - 1) - y_out(o, i);
+            return cachedY - y_out_cached(o, i, cachedY, cachedX);
         }
-        revert("Invalid call to Y");
+        revert("Invalid call to Y_cached");
     }
 
-    function X(ClvrHook.SwapParamsExtended[] memory o, uint256 i) private view returns (uint256) {
+    function X_cached(ClvrHook.SwapParamsExtended[] memory o, uint256 i, uint256 cachedY, uint256 cachedX) private view returns (uint256) {
         if (i == 0) {
             return reserveX;
         } else if (i > 0 && direction(o[i]) == Direction.Sell) {
-            return X(o, i - 1) + amountIn(o[i]);
+            return cachedX + amountIn(o[i]);
         } else if (i > 0 && direction(o[i]) == Direction.Buy) {
-            return X(o, i - 1) - x_out(o, i);
+            return cachedX - x_out_cached(o, i, cachedY, cachedX);
         }
-        revert("Invalid call to X");
+        revert("Invalid call to X_cached");
+    }
+
+    /// @notice Returns the price, the new y and the new x after the swap
+    function P_cached(ClvrHook.SwapParamsExtended[] memory o, uint256 i, uint256 cachedY, uint256 cachedX) private view returns (uint256, uint256, uint256) {
+        uint256 y_cached_new = Y_cached(o, i, cachedY, cachedX);
+        uint256 x_cached_new = X_cached(o, i, cachedY, cachedX);
+        return (y_cached_new * 1e18 / x_cached_new, y_cached_new, x_cached_new);
     }
 
     function direction(ClvrHook.SwapParamsExtended memory o) private pure returns (Direction) {
