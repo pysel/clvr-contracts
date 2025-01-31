@@ -20,9 +20,6 @@ import {PoolSwapTest} from "@uniswap/v4-core/src/test/PoolSwapTest.sol";
 import {ClvrStake} from "./ClvrStake.sol";
 import {ClvrSlashing} from "./ClvrSlashing.sol";
 
-import {console} from "forge-std/console.sol";
-
-
 /// @title ClvrHook
 /// @author Ruslan Akhtariev
 /// @notice This is a Uniswap v4 hook that implements the Clvr protocol.
