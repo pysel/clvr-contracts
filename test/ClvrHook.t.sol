@@ -225,6 +225,7 @@ contract ClvrHookTest is Test, Deployers, Fixtures {
             badOrdering[i] = 2 * (i - USERS_LENGTH/2) + 1;
         }
 
+
         executeBatch(abi.encode(badOrdering));
 
         // better ordering is alternating ordering
@@ -364,6 +365,7 @@ contract ClvrHookTest is Test, Deployers, Fixtures {
 
     function executeBatch(bytes memory swapIds) internal {
         vm.startPrank(scheduler, scheduler);
+        vm.roll(hook.lastBatchBlock() + hook.BATCH_PERIOD() + 1);
         donateRouter.donate(key, 0, 0, swapIds);
         vm.stopPrank();
     }
